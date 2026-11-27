@@ -95,7 +95,10 @@
       kpi(c.Pendiente, 'Pendientes', false) + kpi(k.atrasadas, 'Pendientes con 2+ días', k.atrasadas > 0) +
       kpi(k.enviadasMes, 'Enviadas/emitidas este mes', false) + kpi(k.mes, 'Solicitudes este mes', false) +
       kpi(k.porCobrar, 'Por definir sin pagar', k.porCobrar > 0) +
-      kpi(k.clientesRevisar, 'Clientes por revisar', false);
+      kpi(k.clientesRevisar, 'Clientes por revisar', false) +
+      '<div class="kpi" id="k-app" style="cursor:pointer"><div class="n">' + (k.appClientes || 0) + ' <span style="font-size:15px;font-weight:600;color:var(--gris)">/ ' + (k.appMoviles || 0) + ' móviles</span></div>' +
+      '<div class="t">📲 Clientes con la app (' + (k.appInstaladas || 0) + ' instaladas) · ver lista</div></div>';
+    $('k-app').onclick = verUsoApp;
     $('tabs').innerHTML = ['Pendiente', 'Emitida', 'Enviada', 'Rechazada', 'Todas'].map(function (e) {
       var n = e === 'Pendiente' ? 'Pendientes' : e === 'Todas' ? 'Todas' : e + 's';
       return '<button class="tab' + (r.estado === e ? ' on' : '') + '" data-e="' + e + '">' + n + '<b>' + (c[e] || 0) + '</b></button>';
@@ -216,6 +219,24 @@
     $('f-periodo').value = ''; $('f-pago').value = ''; $('f-cliente').value = ''; $('f-cobrar').checked = false; $('q').value = '';
     EST.texto = ''; leerFiltros(); cargar();
   };
+
+  function verUsoApp() {
+    $('lista').innerHTML = '<div class="card">Cargando quién usa la app…</div>'; $('info').textContent = '';
+    google.script.run.withSuccessHandler(function (r) {
+      if (!r || r.ok === false) { $('lista').innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
+      var h = '<div class="card"><b>📲 Uso de la app</b><div class="meta">' + r.clientes + ' clientes identificados · ' + r.moviles + ' móviles · ' + r.instaladas +
+        ' con la app instalada. El cliente aparece con su nombre cuando entra en «Mis facturas».</div></div>';
+      if (!r.lista.length) h += '<div class="card vacio">Todavía nadie ha abierto la app.</div>';
+      h += r.lista.map(function (x) {
+        return '<div class="card"><div class="top"><div><div class="nom">' + esc(x.cliente || 'Sin identificar') + '</div><div class="meta">' +
+          (x.rfc ? 'RFC ' + esc(x.rfc) + ' · ' : '') + esc(x.plat || 'Móvil') + ' · ' + x.aperturas + ' apertura' + (x.aperturas === 1 ? '' : 's') +
+          '<br>Primera vez ' + esc(x.primera) + ' · última ' + esc(x.ultima) + '</div></div>' +
+          '<span class="pago ' + (x.inst ? 'p-pagada">Instalada' : 'p-cobrar">En el navegador') + '</span></div></div>';
+      }).join('');
+      h += '<button class="tab" onclick="cargar()" style="margin-top:6px">← Volver a las solicitudes</button>';
+      $('lista').innerHTML = h;
+    }).withFailureHandler(function (e) { $('lista').innerHTML = '<div class="aviso no">' + esc(e && e.message) + '</div>'; }).panelUsoApp(K);
+  }
 
   function ver(i, cual, btn) {
     var s = DATOS.lista[i], v = $('v' + i), t = btn.textContent;

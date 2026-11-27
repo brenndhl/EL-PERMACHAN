@@ -158,6 +158,7 @@ function panelDatos(k, f) {
     porCobrar: todas.filter(porCobrar).length,
     clientesRevisar: leerTabla_(hoja_(HOJAS.CLIENTES)).filter(c => c['Revisión'] === 'Pendiente de revisar').length
   };
+  try { const u = usoAppResumen_(); kpi.appMoviles = u.moviles; kpi.appInstaladas = u.instaladas; kpi.appClientes = u.clientes; } catch (e) { /* sin hoja aún */ }
 
   // Lista de clientes para el filtro
   const vistos = {};

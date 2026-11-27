@@ -70,6 +70,21 @@
   var deHash = extraer(location.hash);
   if (deHash) { guardar(deHash); history.replaceState(null, '', location.pathname); }
   var CLAVE = leer();
+
+  // Uso de la app: un identificador anónimo por móvil (para saber cuántos la tienen; el nombre solo se ve al entrar en Mis facturas)
+  function disp() {
+    try { var d = localStorage.getItem('ep_disp'); if (!d) { d = (Date.now().toString(36) + Math.random().toString(36).slice(2, 10)).toLowerCase(); localStorage.setItem('ep_disp', d); } return d; }
+    catch (e) { return ''; }
+  }
+  var DISP = disp();
+  var PLAT = /iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'iPhone' : /Android/i.test(navigator.userAgent) ? 'Android' : 'Ordenador';
+  function instalada() { return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true; }
+  function ping(inst) {
+    if (!DISP) return;
+    try { fetch(EXEC + '?ping=1&d=' + DISP + '&p=' + PLAT + '&inst=' + (inst ? 1 : 0), { mode: 'no-cors', credentials: 'omit' }); } catch (e) {}
+  }
+  try { if (!sessionStorage.getItem('ep_ping')) { sessionStorage.setItem('ep_ping', '1'); ping(instalada()); } } catch (e) { ping(instalada()); }
+  window.addEventListener('appinstalled', function () { ping(true); });
   if (CLAVE) $('b-admin').style.display = 'flex';
 
   var cargadas = {};
@@ -78,7 +93,7 @@
     if (v === 'admin' && !CLAVE) { $('login').style.display = 'flex'; return; }
     var f = document.createElement('iframe');
     f.title = v; f.allow = 'camera; clipboard-write';
-    f.src = v === 'pedir' ? EXEC : v === 'mis' ? EXEC + '?v=mis' : EXEC + '?k=' + encodeURIComponent(CLAVE);
+    f.src = v === 'pedir' ? EXEC : v === 'mis' ? EXEC + '?v=mis&d=' + DISP : EXEC + '?k=' + encodeURIComponent(CLAVE);
     f.onload = function () { var s = $('splash'); s.style.opacity = 0; setTimeout(function () { s.style.display = 'none'; }, 400); };
     $('v-' + v).appendChild(f); cargadas[v] = true;
   }

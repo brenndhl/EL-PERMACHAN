@@ -67,7 +67,7 @@ function clientePedirCodigo(rfcTexto) {
 }
 
 /** Paso 2: con el código correcto devuelve un token que el móvil guarda (90 días). */
-function clienteEntrar(rfcTexto, codigo) {
+function clienteEntrar(rfcTexto, codigo, disp) {
   const rfc = normalizarRFC(rfcTexto);
   const cache = CacheService.getScriptCache();
   const kInt = 'mfi_' + rfc;
@@ -81,6 +81,7 @@ function clienteEntrar(rfcTexto, codigo) {
   const token = Utilities.getUuid().replace(/-/g, '') + Utilities.getUuid().replace(/-/g, '');
   PropertiesService.getScriptProperties().setProperty('mft_' + token, rfc + '|' + (Date.now() + DIAS_SESION_ * 86400000));
   limpiarSesiones_();
+  try { tocarDispositivo_(disp, { rfc: rfc }); } catch (e) { /* sin registro */ }
   return { ok: true, token: token };
 }
 
@@ -107,9 +108,10 @@ function limpiarSesiones_() {
 }
 
 /** Lista de solicitudes del cliente (más recientes primero). */
-function clienteMisFacturas(token) {
+function clienteMisFacturas(token, disp) {
   const rfc = rfcDeToken_(token);
   if (!rfc) return { ok: false, sesion: false, error: 'Tu sesión caducó. Vuelve a entrar con tu RFC.' };
+  try { tocarDispositivo_(disp, { rfc: rfc }); } catch (e) { /* sin registro */ }
   const tz = Session.getScriptTimeZone();
   const facts = facturasMap_();
   let pagos = {};
@@ -354,4 +356,79 @@ function aRevisar_(g, revisar, base, motivo) {
     '<p>Están en la subcarpeta <i>Revisar</i>. Revisa el número de solicitud (la carpeta debe llamarse solo con el número, por ejemplo <b>597</b>) ' +
     'y vuelve a moverla a la carpeta principal; se procesa sola en unos minutos.</p>');
   return base + ' → Revisar: ' + motivo;
+}
+
+/* ============================ USO DE LA APP ============================ */
+// La app (GitHub) avisa cada vez que se abre (?ping=1&d=<id del móvil>&p=<plataforma>&inst=<1 si está instalada>)
+// y, al entrar en "Mis facturas", se une ese móvil con el RFC del cliente.
+
+const HOJA_DISP = 'App - dispositivos';
+const COL_DISP = ['ID dispositivo', 'Plataforma', 'Instalada', 'Primera vez', 'Última vez', 'Aperturas', 'RFC', 'Cliente'];
+
+function hojaDisp_() {
+  const ss = ss_();
+  let sh = ss.getSheetByName(HOJA_DISP);
+  if (!sh) {
+    sh = ss.insertSheet(HOJA_DISP);
+    sh.getRange(1, 1, 1, COL_DISP.length).setValues([COL_DISP]).setFontWeight('bold').setBackground('#1f4e5f').setFontColor('#ffffff');
+    sh.setFrozenRows(1);
+  }
+  return sh;
+}
+
+function idDispValido_(d) { return /^[a-z0-9]{8,40}$/.test(String(d || '')); }
+
+/** Crea o actualiza la fila del móvil. cambios: { abrir:bool, inst:bool, plat, rfc } */
+function tocarDispositivo_(id, cambios) {
+  if (!idDispValido_(id)) return;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(4000)) return;
+  try {
+    const sh = hojaDisp_(), ahora = new Date();
+    const n = sh.getLastRow();
+    const ids = n > 1 ? sh.getRange(2, 1, n - 1, 1).getValues().map(r => String(r[0])) : [];
+    const i = ids.indexOf(String(id));
+    if (i < 0) {
+      const c = cambios.rfc ? buscarCliente_(cambios.rfc) : null;
+      agregarFila_(sh, COL_DISP, { 'ID dispositivo': id, 'Plataforma': cambios.plat || '', 'Instalada': cambios.inst ? 'Sí' : 'No',
+        'Primera vez': ahora, 'Última vez': ahora, 'Aperturas': cambios.abrir ? 1 : 0, 'RFC': cambios.rfc || '',
+        'Cliente': c ? c.datos['Nombre o razón social'] : '' });
+      return;
+    }
+    const fila = i + 2, act = objeto_(COL_DISP, sh.getRange(fila, 1, 1, COL_DISP.length).getValues()[0]);
+    const upd = { 'Última vez': ahora };
+    if (cambios.abrir) upd['Aperturas'] = (Number(act['Aperturas']) || 0) + 1;
+    if (cambios.inst && act['Instalada'] !== 'Sí') upd['Instalada'] = 'Sí';
+    if (cambios.plat && !act['Plataforma']) upd['Plataforma'] = cambios.plat;
+    if (cambios.rfc && act['RFC'] !== cambios.rfc) {
+      const c = buscarCliente_(cambios.rfc);
+      upd['RFC'] = cambios.rfc; upd['Cliente'] = c ? c.datos['Nombre o razón social'] : '';
+    }
+    actualizarFila_(sh, COL_DISP, fila, upd);
+  } finally { lock.releaseLock(); }
+}
+
+/** Lo llama doGet con ?ping=1 cada vez que se abre la app. */
+function registrarUsoApp_(p) {
+  const plat = ['Android', 'iPhone', 'Ordenador'].indexOf(String(p.p)) >= 0 ? String(p.p) : '';
+  tocarDispositivo_(String(p.d || ''), { abrir: true, inst: String(p.inst) === '1', plat: plat });
+}
+
+/** Resumen y lista para el panel. */
+function usoAppResumen_() {
+  const filas = leerTabla_(hojaDisp_()).filter(r => r['ID dispositivo']);
+  const rfcs = {};
+  filas.forEach(r => { if (r['RFC']) rfcs[r['RFC']] = true; });
+  return { moviles: filas.length, instaladas: filas.filter(r => r['Instalada'] === 'Sí').length, clientes: Object.keys(rfcs).length, filas: filas };
+}
+
+function panelUsoApp(k) {
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const tz = Session.getScriptTimeZone();
+  const fmt = d => d instanceof Date ? Utilities.formatDate(d, tz, 'dd/MM/yyyy HH:mm') : '';
+  const u = usoAppResumen_();
+  const lista = u.filas.sort((a, b) => (b['Última vez'] instanceof Date ? b['Última vez'].getTime() : 0) - (a['Última vez'] instanceof Date ? a['Última vez'].getTime() : 0))
+    .map(r => ({ cliente: r['Cliente'] || '', rfc: r['RFC'] || '', plat: r['Plataforma'] || '', inst: r['Instalada'] === 'Sí',
+      primera: fmt(r['Primera vez']), ultima: fmt(r['Última vez']), aperturas: Number(r['Aperturas']) || 0 }));
+  return { ok: true, moviles: u.moviles, instaladas: u.instaladas, clientes: u.clientes, lista: lista };
 }

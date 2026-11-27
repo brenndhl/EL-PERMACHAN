@@ -75,7 +75,7 @@
   </section>
 </main>
 <script>
-  var TOKEN = '', RFC = '';
+  var TOKEN = '', RFC = '', DISP = <?= disp ?>;
   function $(id) { return document.getElementById(id); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function guardar(t) { try { if (t) localStorage.setItem('ep_mf', t); else localStorage.removeItem('ep_mf'); } catch (e) {} }
@@ -99,7 +99,7 @@
     }, function (e) { msg('m-rfc', e); }, this);
   };
   $('b-codigo').onclick = function () {
-    llamar('clienteEntrar', [RFC, $('codigo').value.trim()], function (r) { TOKEN = r.token; guardar(TOKEN); cargar(); },
+    llamar('clienteEntrar', [RFC, $('codigo').value.trim(), DISP], function (r) { TOKEN = r.token; guardar(TOKEN); cargar(); },
       function (e) { msg('m-codigo', e); }, this);
   };
   $('codigo').addEventListener('input', function () { if (this.value.replace(/\D/g, '').length === 6) $('b-codigo').click(); });
@@ -109,7 +109,7 @@
   var ESTADO = { Pendiente: 'En proceso', Emitida: 'En proceso', Enviada: 'Factura lista', Rechazada: 'No se pudo facturar' };
   function cargar() {
     ver('p-lista'); $('lista').innerHTML = '<div class="card">Cargando tus facturas…</div>';
-    llamar('clienteMisFacturas', [TOKEN], function (r) {
+    llamar('clienteMisFacturas', [TOKEN, DISP], function (r) {
       $('nombre').textContent = r.nombre || r.rfc; $('rfc-vista').textContent = 'RFC ' + r.rfc;
       var n = { p: 0, e: 0 }; r.lista.forEach(function (s) { if (s.estado === 'Enviada') n.e++; else if (s.estado !== 'Rechazada') n.p++; });
       $('resumen').innerHTML = '<div><b>' + r.lista.length + '</b><span>solicitadas</span></div><div><b>' + n.p + '</b><span>en proceso</span></div><div><b>' + n.e + '</b><span>listas</span></div>';
