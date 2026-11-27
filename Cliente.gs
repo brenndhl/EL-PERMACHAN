@@ -8,8 +8,9 @@
  *   el PDF y el XML de cada factura. La sesión dura 90 días en su móvil.
  *
  *  CARPETA DE LA CONTADORA:
- *   La contadora sube el PDF y el XML de cada factura a la carpeta
- *   "Facturas El Permachan — subir aquí" (Drive). Cada 10 minutos
+ *   La contadora crea dentro de "Facturas El Permachan — subir aquí" (Drive)
+ *   una carpeta con el NÚMERO DE SOLICITUD (597 = S-00597) y mete el PDF y
+ *   el XML tal cual. (También vale subir 597.pdf / 597.xml o 1-48349.pdf.) Cada 10 minutos
  *   procesarFacturasSubidas() lee el XML (CFDI 4.0): RFC del cliente,
  *   serie/folio, UUID y total; lo une a su solicitud (por el folio del
  *   ticket en el nombre del archivo o, si no, por el RFC), manda la
@@ -207,6 +208,12 @@ function leerCFDI_(texto) {
   };
 }
 
+/** Número de solicitud en un nombre: "597", "S-00597", "s597", "Solicitud 597" → "S-00597". */
+function idDeNombre_(nombre) {
+  const m = /^\s*(?:solicitud\s*)?(?:s\s*-?\s*)?0*(\d{1,6})\s*$/i.exec(String(nombre || ''));
+  return m ? 'S-' + ('00000' + m[1]).slice(-5) : '';
+}
+
 /** Folio del ticket escrito en el nombre del archivo (1-48349, 1_48349, #1-48349 …). */
 function folioDeNombre_(nombre) {
   const m = /(\d{1,3})\s*[-_ ]\s*(\d{3,12})/.exec(String(nombre || ''));
@@ -228,6 +235,19 @@ function procesarFacturasSubidas() {
       if (!ext || ['pdf', 'xml'].indexOf(ext.toLowerCase()) < 0) continue;
       const base = n.replace(/\.[a-z0-9]+$/i, '').trim().toLowerCase();
       (grupos[base] = grupos[base] || {})[ext.toLowerCase()] = f;
+    }
+    // Carpetas con el número de solicitud (597, S-00597…): su PDF y su XML, con cualquier nombre
+    const subs = carpeta.getFolders();
+    while (subs.hasNext()) {
+      const sub = subs.next();
+      if (['Procesadas', 'Revisar'].indexOf(sub.getName()) >= 0) continue;
+      const g = { carpeta: sub, id: idDeNombre_(sub.getName()) };
+      const fs = sub.getFiles();
+      while (fs.hasNext()) {
+        const f = fs.next(), ext = ((/\.([a-z0-9]+)$/i.exec(f.getName()) || [])[1] || '').toLowerCase();
+        if ((ext === 'pdf' || ext === 'xml') && !g[ext]) g[ext] = f;
+      }
+      if (g.pdf || g.xml) grupos['carpeta:' + sub.getName()] = g;
     }
     const ahora = Date.now(), res = [];
     Object.keys(grupos).forEach(base => {
@@ -252,7 +272,16 @@ function procesarGrupo_(base, g, procesadas, revisar) {
   if (g.xml && !cfdi) return aRevisar_(g, revisar, base, 'El XML no es un CFDI válido.');
   const sols = leerTabla_(hoja_(HOJAS.SOLICITUDES)).filter(s => s['ID'] && !facts[String(s['ID'])] && s['Estado'] !== 'Rechazada');
   let s = null, motivo = '';
-  if (folio) {
+  const idSol = g.id || (g.carpeta ? '' : idDeNombre_(base));
+  if (g.carpeta && !idSol) return aRevisar_(g, revisar, base, 'La carpeta "' + g.carpeta.getName() + '" no es un número de solicitud (por ejemplo 597).');
+  if (idSol) {
+    s = sols.filter(x => String(x['ID']) === idSol)[0] || null;
+    if (!s) return aRevisar_(g, revisar, base, 'No hay ninguna solicitud ' + idSol + ' esperando factura (o ya tiene factura).');
+    if (cfdi && cfdi.rfc && normalizarRFC(s['RFC']) !== cfdi.rfc) {
+      return aRevisar_(g, revisar, base, 'La solicitud ' + idSol + ' es de ' + s['RFC'] + ' pero la factura está a nombre de ' + cfdi.rfc + '.');
+    }
+  }
+  if (!s && folio) {
     const porFolio = sols.filter(x => normalizarFolio(x['Folio ticket']) === folio);
     if (porFolio.length === 1) s = porFolio[0];
     else motivo = porFolio.length ? 'Hay varias solicitudes con el ticket ' + folio + '.' : 'No hay ninguna solicitud pendiente con el ticket ' + folio + '.';
@@ -273,8 +302,8 @@ function procesarGrupo_(base, g, procesadas, revisar) {
 
   // Mover a Procesadas y registrar
   const destino = subcarpeta_(procesadas, normalizarRFC(s['RFC']) || 'SIN_RFC');
-  if (g.pdf) g.pdf.moveTo(destino);
-  if (g.xml) g.xml.moveTo(destino);
+  if (g.carpeta) { g.carpeta.setName(s['ID'] + ' — ticket ' + s['Folio ticket']); g.carpeta.moveTo(destino); }
+  else { if (g.pdf) g.pdf.moveTo(destino); if (g.xml) g.xml.moveTo(destino); }
   const serieFolio = cfdi ? [cfdi.serie, cfdi.folio].filter(String).join('-') : '';
   const enviado = mandarFacturaCliente_(s, g, cfdi, serieFolio);
   agregarFila_(hojaFacturas_(), COL_FACTURAS, {
@@ -301,21 +330,28 @@ function mandarFacturaCliente_(s, g, cfdi, serieFolio) {
   if (g.pdf) adj.push(g.pdf.getBlob().setName('Factura_' + (serieFolio || s['Folio ticket']) + '.pdf'));
   if (g.xml) adj.push(g.xml.getBlob().setName('Factura_' + (serieFolio || s['Folio ticket']) + '.xml'));
   const app = String(conf.URL_APP || 'https://brenndhl.github.io/EL-PERMACHAN/');
-  const html = '<p>Hola, aquí tienes tu factura del ticket <b>' + esc_(s['Folio ticket']) + '</b>' +
-    (serieFolio ? ' (factura ' + esc_(serieFolio) + ')' : '') + '. Van adjuntos el PDF y el XML.</p>' +
-    '<p>También la tienes siempre en la app, en <b>Mis facturas</b>, para descargarla cuando quieras:<br>' +
-    '<a href="' + esc_(app) + '">' + esc_(app) + '</a></p>' +
-    '<p>Gracias por tu preferencia.<br>' + esc_(conf.NOMBRE_NEGOCIO) + '</p>';
-  return enviarCorreo_(s['Email'], 'Tu factura — ' + conf.NOMBRE_NEGOCIO + ' — ticket ' + s['Folio ticket'], html, adj);
+  const mis = app + (app.indexOf('?') < 0 ? '?' : '&') + 'v=mis';
+  const html = '<div style="font-family:Arial,sans-serif;max-width:560px;color:#1d1a17">' +
+    '<div style="background:#141110;color:#f3ead6;padding:18px 20px;border-radius:12px 12px 0 0;border-bottom:3px solid #a8774a">' +
+    '<img src="' + esc_(app) + 'logo-256.png" width="56" height="56" style="border-radius:50%;vertical-align:middle;margin-right:12px">' +
+    '<b style="font-size:20px;vertical-align:middle">¡Ya está tu factura!</b></div>' +
+    '<div style="background:#fff;border:1px solid #e5dccb;border-top:0;padding:20px;border-radius:0 0 12px 12px">' +
+    '<p>Hola, tu factura del ticket <b>' + esc_(s['Folio ticket']) + '</b>' + (serieFolio ? ' (factura ' + esc_(serieFolio) + ')' : '') +
+    ' ya está en la app de El Permachan. También te la dejamos adjunta en este correo (PDF y XML).</p>' +
+    '<p style="text-align:center;margin:26px 0"><a href="' + esc_(mis) + '" style="background:#141110;color:#f3ead6;text-decoration:none;' +
+    'font-weight:bold;font-size:18px;padding:14px 28px;border-radius:10px;display:inline-block">Descárgala aquí</a></p>' +
+    '<p style="font-size:14px;color:#6b625a">En la app, en <b>Mis facturas</b>, tienes todas tus facturas para descargarlas cuando quieras.</p>' +
+    '<p>Gracias por tu preferencia.<br>' + esc_(conf.NOMBRE_NEGOCIO) + '</p></div></div>';
+  return enviarCorreo_(s['Email'], '¡Ya está tu factura! — ' + conf.NOMBRE_NEGOCIO + ' — ticket ' + s['Folio ticket'], html, adj);
 }
 
 function aRevisar_(g, revisar, base, motivo) {
-  if (g.pdf) g.pdf.moveTo(revisar);
-  if (g.xml) g.xml.moveTo(revisar);
-  const nombres = [g.pdf && g.pdf.getName(), g.xml && g.xml.getName()].filter(Boolean).join(' y ');
+  if (g.carpeta) g.carpeta.moveTo(revisar);
+  else { if (g.pdf) g.pdf.moveTo(revisar); if (g.xml) g.xml.moveTo(revisar); }
+  const nombres = (g.carpeta ? 'la carpeta ' + g.carpeta.getName() + ': ' : '') + [g.pdf && g.pdf.getName(), g.xml && g.xml.getName()].filter(Boolean).join(' y ');
   enviarCorreo_(cfg_().CORREOS_AVISO, 'Factura por revisar: ' + nombres,
     '<p>No pude asociar <b>' + esc_(nombres) + '</b> a ninguna solicitud.</p><p><b>Motivo:</b> ' + esc_(motivo) + '</p>' +
-    '<p>Los archivos están en la subcarpeta <i>Revisar</i>. Corrige el nombre (por ejemplo <b>1-48349.pdf</b> y <b>1-48349.xml</b>, ' +
-    'con el folio del ticket) y vuelve a moverlos a la carpeta principal; se procesan solos en unos minutos.</p>');
+    '<p>Están en la subcarpeta <i>Revisar</i>. Revisa el número de solicitud (la carpeta debe llamarse solo con el número, por ejemplo <b>597</b>) ' +
+    'y vuelve a moverla a la carpeta principal; se procesa sola en unos minutos.</p>');
   return base + ' → Revisar: ' + motivo;
 }

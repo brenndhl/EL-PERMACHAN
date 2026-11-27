@@ -46,13 +46,15 @@
   .filtros select, .filtros input[type=date] { padding:9px 10px; font-size:15px; border:1px solid #c9d1d4; border-radius:8px; background:#fff; max-width:100%; }
   .filtros label { font-size:15px; display:flex; gap:6px; align-items:center; }
   .filtros .limpiar { border:0; background:none; color:var(--c); text-decoration:underline; font-size:14px; cursor:pointer; }
-  .pago { font-size:12px; font-weight:700; padding:3px 8px; border-radius:999px; margin-left:6px; }
+  .pago { font-size:12px; font-weight:700; padding:3px 8px; border-radius:999px; white-space:nowrap; }
+  .chips { flex:0 0 auto; max-width:46%; display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
+  .badge { white-space:nowrap; }
   .p-cobrar { background:#ffe0b2; color:#8a4b00; } .p-pagada { background:#d9ead3; color:#1e6b3a; }
   .x-pago { background:#b26a00; color:#fff; }
 </style>
 </head>
 <body>
-<header><span style="display:flex;align-items:center;gap:10px"><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt="" style="width:40px;height:40px;border-radius:50%;box-shadow:0 0 0 2px var(--madera)">Panel de facturas — El Permachan</span><button id="recargar">↻ Actualizar</button></header>
+<header><span style="display:flex;align-items:center;gap:10px"><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt="" style="width:40px;height:40px;border-radius:50%;box-shadow:0 0 0 2px var(--madera)">Panel de facturas</span><button id="recargar">↻ Actualizar</button></header>
 <main>
   <div class="kpis" id="kpis"></div>
   <div class="tabs" id="tabs"></div>
@@ -113,7 +115,7 @@
       '<div class="nom">' + esc(s.nombre || s.rfc || '(sin nombre)') + '</div>' +
       '<div class="meta">' + esc(s.id) + ' · ticket ' + esc(s.folio || '—') + ' · ' + esc(s.fecha) +
       (dias ? ' · <span class="' + (tarde ? 'tarde' : '') + '">' + dias + '</span>' : '') + '</div></div>' +
-      '<span><span class="badge b-' + esc(s.estado) + '">' + esc(s.estado || '—') + '</span>' +
+      '<span class="chips"><span class="badge b-' + esc(s.estado) + '">' + esc(s.estado || '—') + '</span>' +
       (s.factura ? '<span class="pago p-pagada">🧾 Factura subida</span>' : '') + (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
       '</span></div>' +
       '<div class="det">' +
