@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Facturas El Permachan</title>
+<meta name="theme-color" content="#1f4e5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Facturas EP">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="cliente-192.png">
+<link rel="apple-touch-icon" href="cliente-180.png">
+<style>
+  html, body { margin:0; height:100%; background:#f4f5f6; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  iframe { position:fixed; inset:0; width:100%; height:100%; border:0; padding-top:env(safe-area-inset-top); box-sizing:border-box; background:#f4f5f6; }
+  #carga { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#1f4e5f; }
+  #carga img { width:84px; height:84px; border-radius:18px; }
+  #instalar { position:fixed; left:12px; right:12px; bottom:12px; display:none; background:#1f4e5f; color:#fff; border:0; border-radius:12px; padding:14px; font-size:17px; font-weight:700; z-index:2; }
+</style>
+</head>
+<body>
+<div id="carga"><img src="cliente-192.png" alt=""><div>Cargando…</div></div>
+<iframe id="app" title="Solicitar factura" allow="camera; clipboard-write" src="https://script.google.com/macros/s/AKfycbwhM2HebJoKMAueXn66luLed3XVVpFsgMWfH0P0aHFUUmvXursfEnXYI1NbM2L0etX3/exec"></iframe>
+<button id="instalar">📲 Instalar la app de facturas</button>
+<script>
+  document.getElementById('app').addEventListener('load', function () { document.getElementById('carga').style.display = 'none'; });
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+  var aviso;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault(); aviso = e;
+    var b = document.getElementById('instalar'); b.style.display = 'block';
+    b.onclick = function () { b.style.display = 'none'; aviso.prompt(); };
+  });
+</script>
+</body>
+</html>
