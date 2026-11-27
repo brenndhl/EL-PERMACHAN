@@ -156,7 +156,7 @@
       '<div class="meta">' + esc(s.id) + ' · ticket ' + esc(s.folio || '—') + ' · ' + esc(s.fecha) +
       (dias ? ' · <span class="' + (tarde ? 'tarde' : '') + '">' + dias + '</span>' : '') + '</div></div>' +
       '<span class="chips"><span class="badge b-' + esc(s.estado) + '">' + esc(s.estado || '—') + '</span>' +
-      (s.factura ? '<span class="pago p-pagada">🧾 Factura subida</span>' : '') + (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
+      (s.factura ? '<span class="pago p-pagada">🧾 Factura subida</span>' : '') + (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' + (s.complemento ? '<span class="pago p-pagada">📎 Complemento</span>' : '<span class="pago p-cobrar">⏳ Falta complemento</span>') : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
       '</span></div>' +
       '<div class="det">' +
       fila('RFC', s.rfc) + fila('Correo', s.email) + fila('Forma de pago', s.pago) + fila('Uso CFDI', s.uso) +
@@ -213,12 +213,13 @@
     var s = DATOS.lista[i], r = $('r' + i);
     if (!$('fp' + i)) {
       r.innerHTML = '<div class="fila" style="margin-top:8px"><b>Fecha de pago:</b> <input type="date" id="fp' + i + '" value="' + DATOS.hoy + '"></div>' +
-        '<textarea id="np' + i + '" placeholder="Nota para la contadora (opcional): transferencia, referencia…"></textarea>' +
-        '<div class="acc"><button class="x-pago" data-i="' + i + '" data-a="Pagada">Confirmar pago y avisar a la contadora</button></div>';
+        '<div class="fila"><b>Forma de pago:</b> <select id="fo' + i + '"><option>Transferencia</option><option>Efectivo</option><option>Tarjeta</option><option>Cheque</option></select></div>' +
+        '<textarea id="np' + i + '" placeholder="Nota para la contadora (opcional): referencia, banco…"></textarea>' +
+        '<div class="acc"><button class="x-pago" data-i="' + i + '" data-a="Pagada">Confirmar pago y pedir el complemento</button></div>';
       return;
     }
-    llamar(btn, r, 'panelMarcarPagada', [K, s.id, $('fp' + i).value, $('np' + i).value],
-      'Marcada como pagada. Aviso enviado a ' + DATOS.correoContadora + '.');
+    llamar(btn, r, 'panelMarcarPagada', [K, s.id, $('fp' + i).value, $('np' + i).value, $('fo' + i).value],
+      'Marcada como pagada. Complemento de pago pedido a ' + DATOS.correoContadora + '.');
   }
   function llamar(btn, r, fn, args, okTxt) {
     btn.disabled = true; var t = btn.textContent; btn.textContent = 'Guardando…';

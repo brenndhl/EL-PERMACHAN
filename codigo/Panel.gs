@@ -90,7 +90,7 @@ function fechaDe_(t) {
 }
 
 /** Marca como pagada una factura "por definir" y avisa a la contadora por correo. */
-function panelMarcarPagada(k, id, fechaTxt, nota) {
+function panelMarcarPagada(k, id, fechaTxt, nota, forma) {
   if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -103,14 +103,18 @@ function panelMarcarPagada(k, id, fechaTxt, nota) {
     nota = String(nota || '').trim().slice(0, 300);
     const para = correoContadora_();
     const tz = Session.getScriptTimeZone();
-    const filas = [['Solicitud', s['ID']], ['Cliente', s['Nombre o razón social']], ['RFC', s['RFC']], ['Ticket', s['Folio ticket']],
-      ['Fecha de la solicitud', s['Fecha solicitud'] instanceof Date ? Utilities.formatDate(s['Fecha solicitud'], tz, 'dd/MM/yyyy') : s['Fecha solicitud']],
-      ['Estado de la factura', s['Estado']], ['Fecha de pago', Utilities.formatDate(fecha, tz, 'dd/MM/yyyy')], ['Nota', nota || '—']]
+    forma = ['Transferencia', 'Efectivo', 'Tarjeta', 'Cheque'].indexOf(forma) >= 0 ? forma : '';
+    const fac = facturasMap_()[String(s['ID'])] || {};
+    const carpeta = String(s['ID']).replace(/^S-0*/, '');
+    const filas = [['Solicitud (carpeta)', carpeta], ['Cliente', s['Nombre o razón social']], ['RFC', s['RFC']], ['Ticket', s['Folio ticket']],
+      ['Factura', fac['Serie-Folio'] || '—'], ['UUID de la factura', fac['UUID'] || '—'], ['Total de la factura', fac['Total'] ? '$' + Number(fac['Total']).toFixed(2) : '—'],
+      ['Fecha de pago', Utilities.formatDate(fecha, tz, 'dd/MM/yyyy')], ['Forma de pago', forma || '—'], ['Nota', nota || '—']]
       .map(([a, b]) => '<tr><td><b>' + esc_(a) + '</b></td><td>' + esc_(b) + '</td></tr>').join('');
-    const enviado = enviarCorreo_(para, 'Factura pagada — ticket ' + s['Folio ticket'] + ' — ' + (s['Nombre o razón social'] || s['RFC']),
-      '<p>Hola, el cliente ya pagó esta factura que estaba como <b>pago por definir</b>:</p>' +
+    const enviado = enviarCorreo_(para, 'Hacer complemento de pago — ' + (s['Nombre o razón social'] || s['RFC']) + ' — solicitud ' + carpeta,
+      '<p>Hola Jovita, el cliente ya pagó esta factura que estaba como <b>pago por definir</b>. Por favor, <b>emite el complemento de pago</b>:</p>' +
       '<table border="1" cellpadding="6" style="border-collapse:collapse">' + filas + '</table>' +
-      '<p>Si corresponde, emite el complemento de pago.</p><p>' + esc_(cfg_().NOMBRE_NEGOCIO) + '</p>');
+      '<p style="font-size:17px">Cuando lo tengas, súbelo <b>igual que las facturas</b>: en la carpeta de siempre, dentro de una carpeta llamada <b>' + esc_(carpeta) +
+      '</b> (el PDF y el XML). El sistema se lo manda solo al cliente.</p><p>' + esc_(cfg_().NOMBRE_NEGOCIO) + '</p>');
     agregarFila_(hojaPagos_(), COL_PAGOS, { 'ID': s['ID'], 'Fecha pago': fecha, 'RFC': s['RFC'], 'Cliente': s['Nombre o razón social'],
       'Folio ticket': s['Folio ticket'], 'Nota': nota, 'Aviso a contadora': enviado ? 'Enviado a ' + para : 'No se pudo enviar', 'Marcado el': new Date() });
     return { ok: true, avisado: enviado, para: para };
@@ -146,6 +150,7 @@ function panelDatos(k, f) {
   try { facts = facturasMap_(); } catch (e) { /* sin hoja de facturas */ }
   const fecha = s => s['Fecha solicitud'] instanceof Date ? s['Fecha solicitud'].getTime() : 0;
   const dias = s => fecha(s) ? Math.floor((ahora - fecha(s)) / 86400000) : null;
+  const compl = complementosMap_();
   const pagada = s => !!pagos[String(s['ID'])];
   const porCobrar = s => porDefinir_(s) && !pagada(s) && s['Estado'] !== 'Rechazada';
 
@@ -193,7 +198,7 @@ function panelDatos(k, f) {
     return Object.assign(resumenSolicitud_(s), {
       dias: dias(s), fechaEstado: fmt(s['Fecha estado']), fechaEmitida: fmt(s['Fecha emitida']),
       notas: s['Notas / motivo'], origen: s['Origen'], uso: s['Uso CFDI'],
-      porDefinir: porDefinir_(s), pagada: !!p,
+      porDefinir: porDefinir_(s), pagada: !!p, complemento: !!compl[String(s['ID'])],
       factura: facts[String(s['ID'])] ? (facts[String(s['ID'])]['Serie-Folio'] || 'sí') : '',
       fechaPago: p && p['Fecha pago'] instanceof Date ? Utilities.formatDate(p['Fecha pago'], tz, 'dd/MM/yyyy') : ''
     });

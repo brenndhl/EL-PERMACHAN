@@ -144,6 +144,7 @@ function clienteMisFacturas(token, disp) {
   const facts = facturasMap_();
   let pagos = {};
   try { pagos = pagosMap_(); } catch (e) { /* sin hoja de pagos */ }
+  const compl = complementosMap_();
   const c = buscarCliente_(rfc);
   const lista = leerTabla_(hoja_(HOJAS.SOLICITUDES))
     .filter(s => s['ID'] && normalizarRFC(s['RFC']) === rfc && puedeVer_(token, rfc, s))
@@ -157,6 +158,7 @@ function clienteMisFacturas(token, disp) {
         enviada: s['Fecha emitida'] instanceof Date ? Utilities.formatDate(s['Fecha emitida'], tz, 'dd/MM/yyyy') : '',
         motivo: s['Estado'] === 'Rechazada' ? String(s['Notas / motivo'] || '') : '',
         porDefinir: /definir/i.test(String(s['Forma de pago'] || '')), pagada: !!pagos[String(s['ID'])],
+        complemento: compl[String(s['ID'])] ? { pdf: !!compl[String(s['ID'])]['PDF'], xml: !!compl[String(s['ID'])]['XML'] } : null,
         factura: f ? { serieFolio: f['Serie-Folio'], total: f['Total'], uuid: f['UUID'], pdf: !!f['PDF'], xml: !!f['XML'],
           fecha: f['Fecha factura'] instanceof Date ? Utilities.formatDate(f['Fecha factura'], tz, 'dd/MM/yyyy') : String(f['Fecha factura'] || '') } : null
       };
@@ -174,8 +176,10 @@ function clienteDescargar(token, id, tipo) {
   if (!f || normalizarRFC(f['RFC']) !== rfc) return { ok: false, error: 'No encuentro esa factura.' };
   const sol = buscarSolicitud_(id);
   if (sol && !puedeVer_(token, rfc, sol.datos)) return { ok: false, error: 'No encuentro esa factura.' };
-  const url = tipo === 'xml' ? f['XML'] : f['PDF'];
-  const b = blobDeUrl_(url, 'Factura_' + (f['Serie-Folio'] || id));
+  const cp = tipo === 'cpdf' || tipo === 'cxml' ? complementosMap_()[String(id)] : null;
+  if ((tipo === 'cpdf' || tipo === 'cxml') && !cp) return { ok: false, error: 'Todavía no hay complemento de pago.' };
+  const url = cp ? (tipo === 'cxml' ? cp['XML'] : cp['PDF']) : (tipo === 'xml' ? f['XML'] : f['PDF']);
+  const b = blobDeUrl_(url, (cp ? 'Complemento_pago_' + f['Folio ticket'] : 'Factura_' + (f['Serie-Folio'] || id)));
   if (!b) return { ok: false, error: 'No se pudo abrir el archivo. Escríbenos a ' + cfg_().RESPONDER_A + '.' };
   return { ok: true, tipo: b.getContentType(), nombre: b.getName(), base64: Utilities.base64Encode(b.getBytes()) };
 }
@@ -235,10 +239,15 @@ function leerCFDI_(texto) {
     return null;
   };
   const rec = buscar(raiz, 'Receptor'), tfd = buscar(raiz, 'TimbreFiscalDigital');
+  const todos = (el, nombre, acc) => { if (el.getName() === nombre) acc.push(el); el.getChildren().forEach(h => todos(h, nombre, acc)); return acc; };
+  const docs = todos(raiz, 'DoctoRelacionado', []);
+  const pago = buscar(raiz, 'Pago');
   return {
     rfc: normalizarRFC(at(rec, 'Rfc')), nombre: at(rec, 'Nombre'),
     serie: at(raiz, 'Serie'), folio: at(raiz, 'Folio'), fecha: at(raiz, 'Fecha'), total: at(raiz, 'Total'),
-    metodo: at(raiz, 'MetodoPago'), uuid: at(tfd, 'UUID').toUpperCase()
+    metodo: at(raiz, 'MetodoPago'), uuid: at(tfd, 'UUID').toUpperCase(), tipo: at(raiz, 'TipoDeComprobante'),
+    relacionados: docs.map(d => at(d, 'IdDocumento').toUpperCase()).filter(String),
+    montoPago: pago ? at(pago, 'Monto') : '', fechaPago: pago ? at(pago, 'FechaPago') : ''
   };
 }
 
@@ -304,6 +313,7 @@ function procesarGrupo_(base, g, procesadas, revisar) {
     return aRevisar_(g, revisar, base, 'Esta factura (UUID ' + cfdi.uuid + ') ya se había subido antes.');
   }
   if (g.xml && !cfdi) return aRevisar_(g, revisar, base, 'El XML no es un CFDI válido.');
+  if (cfdi && cfdi.tipo === 'P') return procesarComplemento_(base, g, cfdi, procesadas, revisar);
   const sols = leerTabla_(hoja_(HOJAS.SOLICITUDES)).filter(s => s['ID'] && !facts[String(s['ID'])] && s['Estado'] !== 'Rechazada');
   let s = null, motivo = '';
   const idSol = g.id || (g.carpeta ? '' : idDeNombre_(base));

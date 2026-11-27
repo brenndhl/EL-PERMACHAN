@@ -160,7 +160,11 @@
           (s.motivo ? '<div class="meta" style="color:#b3261e">Motivo: ' + esc(s.motivo) + '</div>' : '') +
           '</div><span class="chip c-' + esc(s.estado) + '">' + esc(ESTADO[s.estado] || s.estado) + '</span></div>' +
           (f ? '<div class="acc">' + (f.pdf ? '<button data-i="' + i + '" data-t="pdf">⬇️ PDF</button>' : '') +
-            (f.xml ? '<button class="sec" data-i="' + i + '" data-t="xml">⬇️ XML</button>' : '') + '</div><div id="d' + i + '"></div>'
+            (f.xml ? '<button class="sec" data-i="' + i + '" data-t="xml">⬇️ XML</button>' : '') + '</div>' +
+            (s.complemento ? '<div class="meta" style="margin-top:8px">Complemento de pago:</div><div class="acc">' +
+              (s.complemento.pdf ? '<button data-i="' + i + '" data-t="cpdf">⬇️ PDF</button>' : '') +
+              (s.complemento.xml ? '<button class="sec" data-i="' + i + '" data-t="cxml">⬇️ XML</button>' : '') + '</div>' : '') +
+            '<div id="d' + i + '"></div>'
             : (s.estado === 'Enviada' ? '<p class="nota" style="margin:8px 0 0">Te la enviamos por correo.</p>' : '')) + '</div>';
       }).join('');
       window.LISTA = r.lista;

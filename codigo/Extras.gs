@@ -482,14 +482,81 @@ function resumenCaja() {
   return 'Resumen enviado';
 }
 
+/* ============================ COMPLEMENTOS DE PAGO ============================ */
+// Cuando una factura "por definir" se marca pagada, se le pide a la contadora el complemento de pago.
+// Ella lo sube igual que una factura (carpeta con el número de solicitud). El sistema lo reconoce
+// (XML tipo "P"), lo manda al cliente y lo registra aquí.
+
+const COL_COMPL = ['ID solicitud', 'RFC', 'Cliente', 'Folio ticket', 'UUID complemento', 'UUID factura', 'Monto', 'Fecha pago', 'PDF', 'XML', 'Subido', 'Enviado al cliente'];
+function hojaCompl_() { return hojaCon_('Complementos', COL_COMPL); }
+function complementosMap_() {
+  const m = {};
+  try { leerTabla_(hojaCompl_()).forEach(r => { if (r['ID solicitud']) m[String(r['ID solicitud'])] = r; }); } catch (e) { /* sin hoja */ }
+  return m;
+}
+
+function procesarComplemento_(base, g, cfdi, procesadas, revisar) {
+  if (Object.keys(complementosMap_()).some(k => String(complementosMap_()[k]['UUID complemento']).toUpperCase() === cfdi.uuid)) {
+    return aRevisar_(g, revisar, base, 'Este complemento de pago (UUID ' + cfdi.uuid + ') ya se había subido.');
+  }
+  const facts = facturasMap_();
+  let id = g.id || (g.carpeta ? idDeNombre_(g.carpeta.getName()) : idDeNombre_(base));
+  if (!id) {
+    const porUuid = Object.keys(facts).filter(k => cfdi.relacionados.indexOf(String(facts[k]['UUID']).toUpperCase()) >= 0);
+    if (porUuid.length === 1) id = porUuid[0];
+  }
+  const f = id ? buscarSolicitud_(id) : null;
+  if (!f) return aRevisar_(g, revisar, base, 'Es un complemento de pago pero no sé de qué solicitud: pon la carpeta con el número de solicitud.');
+  const s = f.datos;
+  if (cfdi.rfc && normalizarRFC(s['RFC']) !== cfdi.rfc) {
+    return aRevisar_(g, revisar, base, 'El complemento está a nombre de ' + cfdi.rfc + ' pero la solicitud ' + id + ' es de ' + s['RFC'] + '.');
+  }
+  const destino = subcarpeta_(procesadas, normalizarRFC(s['RFC']) || 'SIN_RFC');
+  if (g.carpeta) { g.carpeta.setName(id + ' — complemento de pago'); g.carpeta.moveTo(destino); }
+  else { if (g.pdf) g.pdf.moveTo(destino); if (g.xml) g.xml.moveTo(destino); }
+  let enviado = false;
+  if (emailValido_(s['Email'])) {
+    const conf = cfg_(), adj = [];
+    if (g.pdf) adj.push(g.pdf.getBlob().setName('Complemento_pago_' + s['Folio ticket'] + '.pdf'));
+    if (g.xml) adj.push(g.xml.getBlob().setName('Complemento_pago_' + s['Folio ticket'] + '.xml'));
+    enviado = enviarCorreo_(s['Email'], 'Complemento de pago — ' + conf.NOMBRE_NEGOCIO + ' — ticket ' + s['Folio ticket'],
+      '<p>Hola, te enviamos el <b>complemento de pago</b> de tu factura del ticket <b>' + esc_(s['Folio ticket']) + '</b>' +
+      (facts[id] && facts[id]['Serie-Folio'] ? ' (factura ' + esc_(facts[id]['Serie-Folio']) + ')' : '') + '. Lo tienes adjunto (PDF y XML) y también en la app, en <b>Mis facturas</b>.</p>' +
+      '<p>Gracias por tu pago.<br>' + esc_(conf.NOMBRE_NEGOCIO) + '</p>', adj);
+  }
+  agregarFila_(hojaCompl_(), COL_COMPL, { 'ID solicitud': id, 'RFC': s['RFC'], 'Cliente': s['Nombre o razón social'], 'Folio ticket': s['Folio ticket'],
+    'UUID complemento': cfdi.uuid, 'UUID factura': cfdi.relacionados.join(', '), 'Monto': Number(cfdi.montoPago) || cfdi.montoPago,
+    'Fecha pago': cfdi.fechaPago ? new Date(cfdi.fechaPago.slice(0, 19)) : '', 'PDF': g.pdf ? g.pdf.getUrl() : '', 'XML': g.xml ? g.xml.getUrl() : '',
+    'Subido': new Date(), 'Enviado al cliente': enviado ? 'Sí — ' + s['Email'] : 'No se pudo enviar' });
+  return base + ' → complemento de ' + id + (enviado ? ' enviado' : ' SIN correo');
+}
+
+/** Lunes: recuerda a la contadora los complementos que faltan (pagadas hace más de 3 días sin complemento). */
+function recordarComplementos() {
+  const compl = complementosMap_(), facts = facturasMap_();
+  const limite = Date.now() - 3 * 86400000;
+  const faltan = leerTabla_(hojaPagos_()).filter(p => p['ID'] && !compl[String(p['ID'])] && p['Marcado el'] instanceof Date && p['Marcado el'].getTime() < limite);
+  if (!faltan.length) return 'Nada pendiente';
+  const tz = Session.getScriptTimeZone();
+  enviarCorreo_(correoContadora_(), 'Complementos de pago pendientes (' + faltan.length + ') — ' + cfg_().NOMBRE_NEGOCIO,
+    '<p>Hola, faltan estos <b>complementos de pago</b>. Súbelos igual que las facturas: en la carpeta de siempre, dentro de una carpeta con el <b>número de solicitud</b>.</p>' +
+    '<table border="1" cellpadding="6" style="border-collapse:collapse"><tr><th>Carpeta</th><th>Cliente</th><th>RFC</th><th>Factura</th><th>Pagada el</th></tr>' +
+    faltan.map(p => '<tr><td><b>' + esc_(String(p['ID']).replace(/^S-0*/, '')) + '</b></td><td>' + esc_(p['Cliente']) + '</td><td>' + esc_(p['RFC']) + '</td><td>' +
+      esc_(facts[String(p['ID'])] ? facts[String(p['ID'])]['Serie-Folio'] || facts[String(p['ID'])]['UUID'] : '—') + '</td><td>' +
+      (p['Fecha pago'] instanceof Date ? Utilities.formatDate(p['Fecha pago'], tz, 'dd/MM/yyyy') : '') + '</td></tr>').join('') + '</table>' +
+    '<p>' + esc_(cfg_().NOMBRE_NEGOCIO) + '</p>');
+  return 'Recordatorio enviado: ' + faltan.length;
+}
+
 /* ============================ INSTALACIÓN ============================ */
 
 function instalarExtras() {
-  hojaComent_(); hojaPagoProv_(); hojaPedidos_();
+  hojaComent_(); hojaPagoProv_(); hojaPedidos_(); hojaCompl_();
   ['Correos extra', 'Correos quitados', 'Fecha constancia', 'Aviso CSF'].forEach(colCliente_);
-  ScriptApp.getProjectTriggers().forEach(t => { if (['resumenCaja', 'recordatorioCSF'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (['resumenCaja', 'recordatorioCSF', 'recordarComplementos'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('resumenCaja').timeBased().everyDays(1).atHour(9).create();
   ScriptApp.newTrigger('recordatorioCSF').timeBased().onMonthDay(5).atHour(11).create();
+  ScriptApp.newTrigger('recordarComplementos').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(10).create();
   const txt = 'Extras instalados. Enlace de la cajera: ' + enlaceAppCaja();
   Logger.log(txt);
   return txt;
