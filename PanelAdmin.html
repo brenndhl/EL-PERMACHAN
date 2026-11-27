@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --c:#1f4e5f; --ok:#1e6b3a; --no:#b3261e; --gris:#667; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#f4f5f6; color:#111; font-size:16px; line-height:1.4; }
+  header { background:var(--c); color:#fff; padding:14px 16px; font-size:19px; font-weight:700; display:flex; justify-content:space-between; align-items:center; }
+  header button { background:rgba(255,255,255,.15); color:#fff; border:0; border-radius:8px; padding:8px 12px; font-size:15px; cursor:pointer; }
+  main { max-width:900px; margin:0 auto; padding:14px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .kpi { background:#fff; border-radius:12px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .kpi .n { font-size:28px; font-weight:800; }
+  .kpi .t { font-size:13px; color:var(--gris); }
+  .kpi.alerta .n { color:var(--no); }
+  .tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px; }
+  .tab { flex:0 0 auto; border:1px solid #c9d1d4; background:#fff; border-radius:999px; padding:8px 14px; font-size:15px; cursor:pointer; }
+  .tab.on { background:var(--c); color:#fff; border-color:var(--c); }
+  .tab b { margin-left:4px; }
+  input[type=search] { width:100%; padding:12px 14px; font-size:16px; border:1px solid #c9d1d4; border-radius:10px; margin-bottom:12px; }
+  .card { background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; cursor:pointer; }
+  .nom { font-weight:700; }
+  .meta { font-size:14px; color:var(--gris); }
+  .badge { flex:0 0 auto; font-size:13px; font-weight:700; padding:4px 10px; border-radius:999px; }
+  .b-Pendiente { background:#fff2cc; color:#7a5b00; } .b-Emitida { background:#cfe2f3; color:#1c4f7a; }
+  .b-Enviada { background:#d9ead3; color:#1e6b3a; } .b-Rechazada { background:#f4cccc; color:#8a1c14; }
+  .tarde { color:var(--no); font-weight:700; }
+  .det { display:none; border-top:1px solid #eee; margin-top:10px; padding-top:10px; font-size:15px; }
+  .card.abierta .det { display:block; }
+  .fila { margin:3px 0; } .fila b { display:inline-block; min-width:120px; }
+  .acc { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .acc button, .ver { border:0; border-radius:9px; padding:10px 14px; font-size:15px; font-weight:600; cursor:pointer; }
+  .x-ok { background:var(--ok); color:#fff; } .x-em { background:#1c4f7a; color:#fff; } .x-no { background:var(--no); color:#fff; }
+  .x-re, .ver { background:#e3e8ea; color:var(--c); }
+  button:disabled { opacity:.6; }
+  textarea { width:100%; font-size:15px; padding:10px; border:1px solid #999; border-radius:8px; min-height:70px; margin-top:8px; }
+  .aviso { padding:12px; border-radius:10px; margin:8px 0; }
+  .aviso.ok { background:#e5f4ea; color:var(--ok); } .aviso.no { background:#fde8e7; color:var(--no); }
+  .vacio { text-align:center; padding:30px 10px; color:var(--gris); }
+  a { color:var(--c); }
+  .filtros { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:#fff; border-radius:12px; padding:10px 12px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .filtros select, .filtros input[type=date] { padding:9px 10px; font-size:15px; border:1px solid #c9d1d4; border-radius:8px; background:#fff; max-width:100%; }
+  .filtros label { font-size:15px; display:flex; gap:6px; align-items:center; }
+  .filtros .limpiar { border:0; background:none; color:var(--c); text-decoration:underline; font-size:14px; cursor:pointer; }
+  .pago { font-size:12px; font-weight:700; padding:3px 8px; border-radius:999px; margin-left:6px; }
+  .p-cobrar { background:#ffe0b2; color:#8a4b00; } .p-pagada { background:#d9ead3; color:#1e6b3a; }
+  .x-pago { background:#b26a00; color:#fff; }
+</style>
+</head>
+<body>
+<header><span>Panel de facturas — El Permachan</span><button id="recargar">↻ Actualizar</button></header>
+<main>
+  <div class="kpis" id="kpis"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="filtros">
+    <select id="f-periodo">
+      <option value="">Todas las fechas</option><option value="mes">Este mes</option><option value="pasado">Mes pasado</option>
+      <option value="30">Últimos 30 días</option><option value="rango">Elegir fechas…</option>
+    </select>
+    <input type="date" id="f-desde" style="display:none"><input type="date" id="f-hasta" style="display:none">
+    <select id="f-pago"><option value="">Todas las formas de pago</option></select>
+    <select id="f-cliente"><option value="">Todos los clientes</option></select>
+    <label><input type="checkbox" id="f-cobrar"> Solo por cobrar</label>
+    <button class="limpiar" id="f-limpiar">Quitar filtros</button>
+  </div>
+  <input type="search" id="q" placeholder="Buscar por nombre, RFC, folio, correo o ID…">
+  <div id="info" class="meta" style="margin-bottom:8px"></div>
+  <div id="lista"><div class="card">Cargando…</div></div>
+</main>
+<script>
+  var K = <?= clave ?>;
+  var EST = { estado: 'Pendiente', texto: '' }, DATOS = null, timer = null;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+  function cargar() {
+    $('lista').innerHTML = '<div class="card">Cargando…</div>';
+    google.script.run.withSuccessHandler(pintar).withFailureHandler(function (e) {
+      $('lista').innerHTML = '<div class="aviso no">No se pudo cargar. ' + esc(e && e.message) + '</div>';
+    }).panelDatos(K, EST);
+  }
+
+  function pintar(r) {
+    if (!r || r.ok === false) { $('lista').innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
+    DATOS = r;
+    llenarCombos(r);
+    var c = r.conteos, k = r.kpi;
+    $('kpis').innerHTML =
+      kpi(c.Pendiente, 'Pendientes', false) + kpi(k.atrasadas, 'Pendientes con 2+ días', k.atrasadas > 0) +
+      kpi(k.enviadasMes, 'Enviadas/emitidas este mes', false) + kpi(k.mes, 'Solicitudes este mes', false) +
+      kpi(k.porCobrar, 'Por definir sin pagar', k.porCobrar > 0) +
+      kpi(k.clientesRevisar, 'Clientes por revisar', false);
+    $('tabs').innerHTML = ['Pendiente', 'Emitida', 'Enviada', 'Rechazada', 'Todas'].map(function (e) {
+      var n = e === 'Pendiente' ? 'Pendientes' : e === 'Todas' ? 'Todas' : e + 's';
+      return '<button class="tab' + (r.estado === e ? ' on' : '') + '" data-e="' + e + '">' + n + '<b>' + (c[e] || 0) + '</b></button>';
+    }).join('');
+    $('info').textContent = r.total > r.lista.length ? 'Mostrando ' + r.lista.length + ' de ' + r.total + ' (usa el buscador para afinar)' :
+      r.total + ' resultado' + (r.total === 1 ? '' : 's') + (r.estado === 'Pendiente' ? ' · más antiguas primero' : ' · más recientes primero');
+    if (!r.lista.length) { $('lista').innerHTML = '<div class="card vacio">' + (r.estado === 'Pendiente' && !EST.texto ? '🎉 No hay facturas pendientes.' : 'Sin resultados.') + '</div>'; return; }
+    $('lista').innerHTML = r.lista.map(tarjeta).join('');
+  }
+
+  function kpi(n, t, alerta) { return '<div class="kpi' + (alerta ? ' alerta' : '') + '"><div class="n">' + (n || 0) + '</div><div class="t">' + t + '</div></div>'; }
+
+  function tarjeta(s, i) {
+    var dias = s.dias == null ? '' : s.dias === 0 ? 'hoy' : 'hace ' + s.dias + ' día' + (s.dias === 1 ? '' : 's');
+    var tarde = s.estado === 'Pendiente' && s.dias >= 2;
+    var h = '<div class="card" id="c' + i + '"><div class="top" data-abrir="' + i + '"><div>' +
+      '<div class="nom">' + esc(s.nombre || s.rfc || '(sin nombre)') + '</div>' +
+      '<div class="meta">' + esc(s.id) + ' · ticket ' + esc(s.folio || '—') + ' · ' + esc(s.fecha) +
+      (dias ? ' · <span class="' + (tarde ? 'tarde' : '') + '">' + dias + '</span>' : '') + '</div></div>' +
+      '<span><span class="badge b-' + esc(s.estado) + '">' + esc(s.estado || '—') + '</span>' +
+      (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
+      '</span></div>' +
+      '<div class="det">' +
+      fila('RFC', s.rfc) + fila('Correo', s.email) + fila('Forma de pago', s.pago) + fila('Uso CFDI', s.uso) +
+      fila('Origen', s.origen) + (s.fechaEmitida ? fila('Emitida/enviada', s.fechaEmitida) : '') +
+      (s.estado !== 'Pendiente' ? fila('Último cambio', s.fechaEstado) : '') +
+      (s.comentario ? fila('Comentario', s.comentario) : '') + (s.notas ? fila('Notas / motivo', s.notas) : '') +
+      '<div class="acc">' +
+      (s.foto ? '<button class="ver" data-ver="' + i + '" data-c="foto">📷 Ticket</button>' : '') +
+      (s.constancia ? '<button class="ver" data-ver="' + i + '" data-c="constancia">📄 Constancia</button>' : '') +
+      '</div><div class="visor" id="v' + i + '"></div>' +
+      '<div class="acc">' + acciones(s, i) + '</div><div id="r' + i + '"></div></div></div>';
+    return h;
+  }
+  function fila(k, v) { return '<div class="fila"><b>' + k + ':</b> ' + esc(v || '—') + '</div>'; }
+  function acciones(s, i) {
+    var b = [];
+    if (s.estado !== 'Enviada') b.push('<button class="x-ok" data-i="' + i + '" data-a="Enviada">✅ Enviada</button>');
+    if (s.estado !== 'Emitida' && s.estado !== 'Enviada') b.push('<button class="x-em" data-i="' + i + '" data-a="Emitida">📄 Emitida</button>');
+    if (s.estado !== 'Rechazada') b.push('<button class="x-no" data-i="' + i + '" data-a="Rechazada">❌ Rechazar</button>');
+    if (s.estado !== 'Pendiente') b.push('<button class="x-re" data-i="' + i + '" data-a="Pendiente">↩️ Volver a pendiente</button>');
+    if (s.porDefinir && !s.pagada) b.push('<button class="x-pago" data-i="' + i + '" data-a="Pagada">💰 Marcar pagada</button>');
+    if (s.pagada) b.push('<button class="x-re" data-i="' + i + '" data-a="QuitarPagada">↩️ Quitar pagada</button>');
+    return b.join('');
+  }
+
+  function cambiar(i, estado, btn) {
+    var s = DATOS.lista[i], r = $('r' + i);
+    if (estado === 'Pagada') return marcarPagada(i, btn);
+    if (estado === 'QuitarPagada') {
+      if (!confirm('¿Quitar la marca de pagada de ' + s.id + '? (no se manda correo)')) return;
+      return llamar(btn, r, 'panelQuitarPagada', [K, s.id], 'Quitada la marca de pagada.');
+    }
+    if (estado === 'Rechazada' && !$('m' + i)) {
+      r.innerHTML = '<textarea id="m' + i + '" placeholder="Motivo (le llega al cliente): ticket de otro mes, falta constancia, RFC no coincide…"></textarea>' +
+        '<div class="acc"><button class="x-no" data-i="' + i + '" data-a="Rechazada">Confirmar rechazo y avisar</button></div>';
+      return;
+    }
+    var aviso = estado === 'Pendiente' ? '¿Volver a poner ' + s.id + ' como pendiente? (al cliente no se le avisa)' :
+      estado === 'Rechazada' ? null : '¿Marcar ' + s.id + ' como ' + estado + '? Al cliente le llega un correo.';
+    if (aviso && !confirm(aviso)) return;
+    var motivo = $('m' + i) ? $('m' + i).value : '';
+    btn.disabled = true; var t = btn.textContent; btn.textContent = 'Guardando…';
+    google.script.run.withSuccessHandler(function (res) {
+      if (!res || res.ok === false) { btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">' + esc(res && res.error) + '</div>'; return; }
+      r.innerHTML = '<div class="aviso ok">Hecho: ' + esc(s.id) + ' ahora está como <b>' + esc(estado) + '</b>.</div>';
+      setTimeout(cargar, 1200);
+    }).withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">Error: ' + esc(e && e.message) + '</div>';
+    }).panelCambiarEstado(K, s.id, estado, motivo);
+  }
+
+  function marcarPagada(i, btn) {
+    var s = DATOS.lista[i], r = $('r' + i);
+    if (!$('fp' + i)) {
+      r.innerHTML = '<div class="fila" style="margin-top:8px"><b>Fecha de pago:</b> <input type="date" id="fp' + i + '" value="' + DATOS.hoy + '"></div>' +
+        '<textarea id="np' + i + '" placeholder="Nota para la contadora (opcional): transferencia, referencia…"></textarea>' +
+        '<div class="acc"><button class="x-pago" data-i="' + i + '" data-a="Pagada">Confirmar pago y avisar a la contadora</button></div>';
+      return;
+    }
+    llamar(btn, r, 'panelMarcarPagada', [K, s.id, $('fp' + i).value, $('np' + i).value],
+      'Marcada como pagada. Aviso enviado a ' + DATOS.correoContadora + '.');
+  }
+  function llamar(btn, r, fn, args, okTxt) {
+    btn.disabled = true; var t = btn.textContent; btn.textContent = 'Guardando…';
+    var run = google.script.run.withSuccessHandler(function (res) {
+      if (!res || res.ok === false) { btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">' + esc(res && res.error) + '</div>'; return; }
+      r.innerHTML = '<div class="aviso ok">' + esc(res.avisado === false ? 'Guardado, pero el correo no se pudo enviar.' : okTxt) + '</div>';
+      setTimeout(cargar, 1200);
+    }).withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">Error: ' + esc(e && e.message) + '</div>';
+    });
+    run[fn].apply(run, args);
+  }
+
+  // ---- Filtros ----
+  function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function leerFiltros() {
+    var p = $('f-periodo').value, h = new Date(), d = '', a = '';
+    if (p === 'mes') { d = ymd(new Date(h.getFullYear(), h.getMonth(), 1)); }
+    else if (p === 'pasado') { d = ymd(new Date(h.getFullYear(), h.getMonth() - 1, 1)); a = ymd(new Date(h.getFullYear(), h.getMonth(), 0)); }
+    else if (p === '30') { d = ymd(new Date(h.getTime() - 29 * 86400000)); }
+    else if (p === 'rango') { d = $('f-desde').value; a = $('f-hasta').value; }
+    $('f-desde').style.display = $('f-hasta').style.display = p === 'rango' ? '' : 'none';
+    EST.desde = d; EST.hasta = a; EST.pago = $('f-pago').value; EST.cliente = $('f-cliente').value; EST.porCobrar = $('f-cobrar').checked;
+  }
+  var combosListos = false;
+  function llenarCombos(r) {
+    if (combosListos) return; combosListos = true;
+    $('f-pago').innerHTML += (r.formasPago || []).map(function (x) { return '<option value="' + esc(x) + '">' + esc(x) + '</option>'; }).join('');
+    $('f-cliente').innerHTML += (r.clientes || []).map(function (c) { return '<option value="' + esc(c[0]) + '">' + esc(c[1]) + ' (' + esc(c[0]) + ')</option>'; }).join('');
+  }
+  ['f-periodo', 'f-desde', 'f-hasta', 'f-pago', 'f-cliente', 'f-cobrar'].forEach(function (id) {
+    $(id).addEventListener('change', function () { leerFiltros(); if (id === 'f-cobrar' && EST.porCobrar) EST.estado = 'Todas'; if (id !== 'f-periodo' || $('f-periodo').value !== 'rango') cargar(); });
+  });
+  $('f-limpiar').onclick = function () {
+    $('f-periodo').value = ''; $('f-pago').value = ''; $('f-cliente').value = ''; $('f-cobrar').checked = false; $('q').value = '';
+    EST.texto = ''; leerFiltros(); cargar();
+  };
+
+  function ver(i, cual, btn) {
+    var s = DATOS.lista[i], v = $('v' + i), t = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Abriendo…';
+    google.script.run.withSuccessHandler(function (r) {
+      btn.disabled = false; btn.textContent = t;
+      if (!r || r.ok === false) { v.innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
+      var bin = atob(r.base64), arr = new Uint8Array(bin.length);
+      for (var j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+      var url = URL.createObjectURL(new Blob([arr], { type: r.tipo }));
+      v.innerHTML = (/^image\//.test(r.tipo) ? '<img src="' + url + '" alt="" style="width:100%;max-width:520px;border-radius:8px;margin-top:8px;border:1px solid #ccc">' : '') +
+        '<p><a href="' + url + '" target="_blank">🔍 Abrir en grande</a> · <a href="' + url + '" download="' + esc(r.nombre) + '">⬇️ Descargar</a></p>';
+    }).withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = t; v.innerHTML = '<div class="aviso no">' + esc(e && e.message) + '</div>';
+    }).panelArchivo(K, s.id, cual);
+  }
+
+  document.addEventListener('click', function (ev) {
+    var el = ev.target.closest ? ev.target : null; if (!el) return;
+    var tab = el.closest('.tab'); if (tab) { EST.estado = tab.dataset.e; cargar(); return; }
+    var vb = el.closest('button[data-ver]'); if (vb) { ver(Number(vb.dataset.ver), vb.dataset.c, vb); return; }
+    var ab = el.closest('button[data-a]'); if (ab) { cambiar(Number(ab.dataset.i), ab.dataset.a, ab); return; }
+    var top = el.closest('[data-abrir]'); if (top) { $('c' + top.dataset.abrir).classList.toggle('abierta'); }
+  });
+  $('q').addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { EST.texto = $('q').value; cargar(); }, 400);
+  });
+  $('recargar').onclick = cargar;
+  cargar();
+</script>
+</body>
+</html>
