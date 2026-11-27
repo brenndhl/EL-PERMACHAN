@@ -1,5 +1,5 @@
 // Guarda la "carcasa" de la app para que abra rápido; los datos siempre vienen de internet.
-const CACHE = 'ep-v2';
+const CACHE = 'ep-v3';
 const ARCHIVOS = ['./', 'index.html', 'manifest.webmanifest', 'icono-192.png', 'icono-512.png', 'logo-512.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ARCHIVOS))); self.skipWaiting(); });
 self.addEventListener('activate', e => {

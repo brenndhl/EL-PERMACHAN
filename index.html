@@ -41,6 +41,7 @@
 
 <div class="vista" id="v-pedir"></div>
 <div class="vista" id="v-mis"></div>
+<div class="vista" id="v-ayuda"></div>
 <div class="vista" id="v-admin">
   <div id="login"><div class="caja">
     <h2 style="margin:0 0 6px">Administración</h2>
@@ -55,7 +56,8 @@
 <nav>
   <button id="b-pedir" data-v="pedir"><span>🧾</span>Pedir factura</button>
   <button id="b-mis" data-v="mis"><span>📂</span>Mis facturas</button>
-  <button id="b-admin" data-v="admin"><span>🔒</span>Administración</button>
+  <button id="b-ayuda" data-v="ayuda"><span>💬</span>Ayuda</button>
+  <button id="b-admin" data-v="admin"><span id="i-admin">🔒</span><b id="t-admin" style="font-weight:600">Administración</b></button>
 </nav>
 
 <script>
@@ -68,7 +70,8 @@
   // Acceso de administración: se activa una vez con el enlace privado (#k=...) y queda en este móvil.
   if (location.hash === '#salir') { guardar(''); history.replaceState(null, '', location.pathname); }
   var deHash = extraer(location.hash);
-  if (deHash) { guardar(deHash); history.replaceState(null, '', location.pathname); }
+  if (deHash) { guardar(deHash); try { localStorage.setItem('ep_rol', /[&#]r=caja/.test(location.hash) ? 'caja' : 'admin'); } catch (e) {} history.replaceState(null, '', location.pathname); }
+  function rol() { try { return localStorage.getItem('ep_rol') || 'admin'; } catch (e) { return 'admin'; } }
   var CLAVE = leer();
 
   // Uso de la app: un identificador anónimo por móvil (para saber cuántos la tienen; el nombre solo se ve al entrar en Mis facturas)
@@ -85,7 +88,8 @@
   }
   try { if (!sessionStorage.getItem('ep_ping')) { sessionStorage.setItem('ep_ping', '1'); ping(instalada()); } } catch (e) { ping(instalada()); }
   window.addEventListener('appinstalled', function () { ping(true); });
-  if (CLAVE) $('b-admin').style.display = 'flex';
+  function etiqueta() { if (rol() === 'caja') { $('i-admin').textContent = '🧾'; $('t-admin').textContent = 'Caja'; } }
+  if (CLAVE) { $('b-admin').style.display = 'flex'; etiqueta(); }
 
   var cargadas = {};
   function marco(v) {
@@ -93,12 +97,12 @@
     if (v === 'admin' && !CLAVE) { $('login').style.display = 'flex'; return; }
     var f = document.createElement('iframe');
     f.title = v; f.allow = 'camera; clipboard-write';
-    f.src = v === 'pedir' ? EXEC : v === 'mis' ? EXEC + '?v=mis&d=' + DISP : EXEC + '?k=' + encodeURIComponent(CLAVE);
+    f.src = v === 'pedir' ? EXEC : v === 'mis' ? EXEC + '?v=mis&d=' + DISP : v === 'ayuda' ? EXEC + '?v=ayuda' : EXEC + '?k=' + encodeURIComponent(CLAVE);
     f.onload = function () { var s = $('splash'); s.style.opacity = 0; setTimeout(function () { s.style.display = 'none'; }, 400); };
     $('v-' + v).appendChild(f); cargadas[v] = true;
   }
   function ir(v) {
-    ['pedir', 'mis', 'admin'].forEach(function (x) { $('v-' + x).classList.toggle('on', x === v); $('b-' + x).classList.toggle('on', x === v); });
+    ['pedir', 'mis', 'ayuda', 'admin'].forEach(function (x) { $('v-' + x).classList.toggle('on', x === v); $('b-' + x).classList.toggle('on', x === v); });
     marco(v);
     try { sessionStorage.setItem('ep_vista', v); } catch (e) {}
   }
@@ -107,7 +111,7 @@
     var c = extraer($('clave').value); if (!c) return;
     CLAVE = c; guardar(c); $('login').style.display = 'none'; $('b-admin').style.display = 'flex'; cargadas.admin = false; ir('admin');
   };
-  var inicio = (location.search.match(/[?&]v=(pedir|mis|admin)/) || [])[1] || (deHash ? 'admin' : '');
+  var inicio = (location.search.match(/[?&]v=(pedir|mis|ayuda|admin)/) || [])[1] || (deHash ? 'admin' : '');
   try { inicio = inicio || sessionStorage.getItem('ep_vista') || 'pedir'; } catch (e) { inicio = inicio || 'pedir'; }
   ir(inicio);
   setTimeout(function () { var s = $('splash'); if (s.style.display !== 'none') { s.style.opacity = 0; setTimeout(function () { s.style.display = 'none'; }, 400); } }, 6000);
