@@ -12,7 +12,7 @@
   header img { width:46px; height:46px; border-radius:50%; box-shadow:0 0 0 2px var(--madera); }
   header b { font-size:20px; }
   .tabs { display:flex; background:#2a2421; }
-  .tabs button { flex:1; border:0; background:none; color:#cbbfa8; font-size:17px; font-weight:700; padding:14px; cursor:pointer; }
+  .tabs button { flex:1; padding-left:4px; padding-right:4px; font-size:15px; border:0; background:none; color:#cbbfa8; font-size:17px; font-weight:700; padding:14px; cursor:pointer; }
   .tabs button.on { background:var(--madera); color:#fff; }
   main { max-width:560px; margin:0 auto; padding:14px; }
   .card { background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
@@ -33,11 +33,22 @@
   .c-Pendiente { background:#fff2cc; color:#7a5b00; } .c-Pagado, .c-Pedido { background:#d9ead3; color:var(--ok); }
   .oculto { display:none; }
   .doble { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .calc { background:#faf3e6; border-radius:12px; padding:12px; margin-top:14px; font-size:16px; }
+  .calc div { display:flex; justify-content:space-between; padding:3px 0; } .calc .tot { border-top:1px solid #d8cfc0; margin-top:4px; padding-top:7px; font-weight:800; }
+  .dif-ok { color:var(--ok); } .dif-mal { color:var(--err); }
 </style>
 </head>
 <body>
-<header><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt=""><div><b>Caja</b><div class="nota" style="color:#cbbfa8">Pagos a proveedores y pedidos</div></div></header>
-<div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button></div>
+<header><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt=""><div style="flex:1"><b>Caja</b><div class="nota" style="color:#cbbfa8" id="quien">Pagos, pedidos y corte</div></div>
+  <button id="b-salir" style="display:none;background:rgba(255,255,255,.15);color:#fff;border:0;border-radius:8px;padding:8px 10px;font-size:14px">Cambiar</button></header>
+<div id="login" style="display:none;position:fixed;inset:0;background:#f5f1ea;z-index:9;padding:12vh 16px 0">
+  <div class="card" style="max-width:420px;margin:0 auto;text-align:center">
+    <h2>¿Quién eres?</h2><p class="nota">Escribe tu código de cajera (4 cifras). Te lo da Brenda. Solo hace falta una vez en este móvil.</p>
+    <input id="l-cod" inputmode="numeric" maxlength="6" style="font-size:28px;letter-spacing:8px;text-align:center" placeholder="••••">
+    <button class="grande" id="b-entrar">Entrar</button><div id="m-login"></div>
+  </div>
+</div>
+<div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button><button data-t="corte">🧮 Corte</button><button data-t="rfc">🔎 RFC</button></div>
 <main>
   <section id="t-pagos">
     <div class="card">
@@ -69,22 +80,65 @@
     </div>
     <div class="card"><h2>Pedidos</h2><div id="l-pedidos" class="nota">Cargando…</div></div>
   </section>
+
+  <section id="t-corte" class="oculto">
+    <div class="card" style="background:#141110;color:#f3ead6">
+      <div class="nota" style="color:#cbbfa8">💳 Dinero de tarjeta acumulado (ya sin comisión)</div>
+      <div id="saldo" style="font-size:32px;font-weight:800;margin-top:4px">—</div>
+      <div class="nota" id="saldo-mes" style="color:#cbbfa8"></div>
+    </div>
+    <div class="card">
+      <h2>Corte del día</h2>
+      <p class="nota">Llénalo al cerrar con el cierre de la terminal Getnet. Si te equivocas, vuelve a guardarlo con la misma fecha y se corrige.</p>
+      <label>Fecha</label><input id="c-fecha" type="date">
+      <div class="doble"><div><label>Tarjeta de débito ($)</label><input id="c-debito" inputmode="decimal" placeholder="0.00"></div>
+        <div><label>Tarjeta de crédito ($)</label><input id="c-credito" inputmode="decimal" placeholder="0.00"></div></div>
+      <div class="calc" id="c-calc-t"></div>
+      <details style="margin-top:12px"><summary style="font-weight:700;cursor:pointer">💵 Cuadrar también el efectivo (opcional)</summary>
+        <div class="doble"><div><label>Fondo inicial ($)</label><input id="c-fondo" inputmode="decimal" placeholder="0.00"></div>
+          <div><label>Ventas totales del día ($)</label><input id="c-ventas" inputmode="decimal" placeholder="Según el TPV"></div></div>
+        <div class="doble"><div><label>Transferencias ($)</label><input id="c-transf" inputmode="decimal" placeholder="0.00"></div>
+          <div><label>Gastos pagados en efectivo ($)</label><input id="c-gastos" inputmode="decimal" placeholder="0.00"></div></div>
+        <label>¿Qué gastos?</label><input id="c-detalle" placeholder="Ej. hielo, gas">
+        <label>Efectivo contado en caja ($)</label><input id="c-contado" inputmode="decimal" placeholder="Lo que hay al contar">
+        <div class="calc" id="c-calc-e"></div>
+      </details>
+      <label>Notas (opcional)</label><input id="c-notas">
+      <label>Foto del cierre de la terminal (opcional)</label><input id="c-foto" type="file" accept="image/*,application/pdf">
+      <button class="grande" id="b-corte">Guardar corte</button>
+      <div id="m-corte"></div>
+    </div>
+    <div class="card"><h2>Días anteriores</h2><div id="l-cortes" class="nota">Cargando…</div></div>
+  </section>
+
+  <section id="t-rfc" class="oculto">
+    <div class="card">
+      <h2>¿Persona física o moral?</h2>
+      <p class="nota">Escribe el RFC del cliente. Te digo si es persona física o moral y si ya lo tenemos registrado.</p>
+      <label>RFC</label><input id="r-rfc" autocapitalize="characters" maxlength="20" placeholder="Ej. XAXX010101000">
+      <button class="grande" id="b-rfc">Consultar</button>
+      <div id="m-rfc"></div>
+    </div>
+  </section>
 </main>
 <script>
-  var K = <?= clave ?>, D = null;
+  var K = <?= clave ?>, D = null, CAJERA = null;
+  try { CAJERA = JSON.parse(localStorage.getItem('ep_cajera') || 'null'); } catch (e) { CAJERA = null; }
+  function cod() { return CAJERA ? CAJERA.codigo : ''; }
   function $(id) { return document.getElementById(id); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function msg(id, t, tipo) { $(id).innerHTML = t ? '<div class="msg ' + (tipo || 'err') + '">' + esc(t) + '</div>' : ''; }
   function llamar(fn, args, ok, fail, btn) {
     var t = btn && btn.textContent; if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
-    var r = google.script.run.withSuccessHandler(function (res) { if (btn) { btn.disabled = false; btn.textContent = t; } if (res && res.ok === false) fail(res.error); else ok(res); })
+    var r = google.script.run.withSuccessHandler(function (res) { if (btn) { btn.disabled = false; btn.textContent = t; } if (res && res.cajera === false) { salir(); return; } if (res && res.ok === false) fail(res.error); else ok(res); })
       .withFailureHandler(function (e) { if (btn) { btn.disabled = false; btn.textContent = t; } fail(e && e.message || 'Sin conexión. Inténtalo de nuevo.'); });
+    var ok0 = ok; ok = function (res) { ok0(res); };
     r[fn].apply(r, args);
   }
   document.querySelector('.tabs').onclick = function (ev) {
     var b = ev.target.closest('button'); if (!b) return;
     Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle('on', x === b); });
-    $('t-pagos').classList.toggle('oculto', b.dataset.t !== 'pagos'); $('t-pedidos').classList.toggle('oculto', b.dataset.t !== 'pedidos');
+    ['pagos', 'pedidos', 'corte', 'rfc'].forEach(function (t) { $('t-' + t).classList.toggle('oculto', b.dataset.t !== t); });
   };
 
   function cargar() {
@@ -92,14 +146,24 @@
       D = r;
       $('dl-prov').innerHTML = r.proveedores.map(function (p) { return '<option value="' + esc(p[0]) + '">'; }).join('');
       $('l-pagos').innerHTML = r.pagos.length ? r.pagos.slice(0, 30).map(function (p) {
-        return '<div class="fila"><div><b>' + esc(p.proveedor) + '</b> · $' + p.importe.toFixed(2) + '<div class="meta">' + esc(p.fecha) + (p.concepto ? ' · ' + esc(p.concepto) : '') +
+        return '<div class="fila"><div><b>' + esc(p.proveedor) + '</b> · $' + p.importe.toFixed(2) + '<div class="meta">' + esc(p.fecha) + (p.por ? ' · ' + esc(p.por) : '') + (p.concepto ? ' · ' + esc(p.concepto) : '') +
           (p.pagado ? '<br>Pagado ' + esc(p.pagado) + (p.aviso ? ' · ' + esc(p.aviso) : '') : (p.limite ? '<br>Antes del ' + esc(p.limite) : '')) + '</div></div>' +
           '<span class="chip c-' + esc(p.estado) + '">' + esc(p.estado) + '</span></div>';
       }).join('') : 'Todavía no has pedido pagos.';
       $('l-pedidos').innerHTML = r.pedidos.length ? r.pedidos.slice(0, 60).map(function (p) {
-        return '<div class="fila"><div><b>' + esc(p.producto) + '</b> · ' + esc(p.cantidad) + '<div class="meta">' + esc(p.proveedor || 'Sin proveedor') + ' · ' + esc(p.fecha) +
+        return '<div class="fila"><div><b>' + esc(p.producto) + '</b> · ' + esc(p.cantidad) + '<div class="meta">' + esc(p.proveedor || 'Sin proveedor') + ' · ' + esc(p.fecha) + (p.por ? ' · ' + esc(p.por) : '') +
           (p.pedido ? '<br>Pedido el ' + esc(p.pedido) : '') + '</div></div><span class="chip c-' + esc(p.estado) + '">' + esc(p.estado === 'Pedido' ? 'Pedido ✔' : 'Por pedir') + '</span></div>';
       }).join('') : 'Todavía no hay pedidos.';
+      var cs = r.cortes || { lista: [] }, cl = cs.lista || [];
+      if (cs.tasas) TASAS = cs.tasas;
+      if (cs.saldo) $('saldo').textContent = '$' + cs.saldo.total.toFixed(2);
+      if (cs.mes) $('saldo-mes').textContent = 'Este mes: cobrado con tarjeta $' + cs.mes.tarjeta.toFixed(2) + ' · comisión Getnet $' + cs.mes.comision.toFixed(2) + ' · llegan $' + cs.mes.neto.toFixed(2);
+      calcular();
+      $('l-cortes').innerHTML = cl.length ? cl.slice(0, 31).map(function (c) {
+        var efe = c.contado === null ? '' : (Math.abs(c.diferencia) < 0.5 ? '<span class="chip c-Pagado">Efectivo cuadra</span>' : '<span class="chip c-Pendiente">' + (c.diferencia > 0 ? 'Sobra' : 'Falta') + ' $' + Math.abs(c.diferencia).toFixed(2) + '</span>');
+        return '<div class="fila"><div><b>' + esc(fechaBonita(c.fecha)) + '</b> · tarjeta $' + c.tarjeta.toFixed(2) + '<div class="meta">Comisión $' + c.comision.toFixed(2) +
+          ' · llegan <b>$' + c.neto.toFixed(2) + '</b></div></div>' + efe + '</div>';
+      }).join('') : 'Todavía no hay cortes.';
     }, function (e) { $('l-pagos').innerHTML = $('l-pedidos').innerHTML = '<div class="msg err">' + esc(e) + '</div>'; });
   }
   $('p-prov').addEventListener('change', function () {
@@ -116,7 +180,7 @@
     var btn = this; msg('m-pago', '');
     leerArchivo($('p-adj'), function (adj) {
       if (adj === false) return msg('m-pago', 'El archivo pesa demasiado (máximo 8 MB).');
-      llamar('cajaNuevoPago', [K, { proveedor: $('p-prov').value, correo: $('p-correo').value, importe: $('p-imp').value, limite: $('p-lim').value, concepto: $('p-con').value, adjunto: adj }],
+      llamar('cajaNuevoPago', [K, { proveedor: $('p-prov').value, correo: $('p-correo').value, importe: $('p-imp').value, limite: $('p-lim').value, concepto: $('p-con').value, adjunto: adj, cajera: cod() }],
         function (r) {
           msg('m-pago', 'Listo: pago ' + r.id + ' enviado a Brenda.', 'ok');
           ['p-prov', 'p-correo', 'p-imp', 'p-lim', 'p-con', 'p-adj'].forEach(function (id) { $(id).value = ''; }); cargar();
@@ -137,11 +201,71 @@
     var items = Array.prototype.map.call($('items').children, function (d) {
       return { proveedor: prov, producto: d.querySelector('.it-p').value, cantidad: d.querySelector('.it-c').value, notas: notas };
     }).filter(function (x) { return x.producto.trim(); });
-    llamar('cajaNuevoPedido', [K, items], function (r) {
+    llamar('cajaNuevoPedido', [K, items, cod()], function (r) {
       msg('m-pedido', 'Listo: ' + r.n + ' producto' + (r.n === 1 ? '' : 's') + ' en la lista de pedidos.', 'ok');
       $('items').innerHTML = ''; [0, 1, 2].forEach(fila); $('d-notas').value = ''; cargar();
     }, function (e) { msg('m-pedido', e); }, this);
   };
+  function fechaBonita(f) { var p = String(f).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + p[0] : f; }
+  var TASAS = { debito: 1.79, credito: 2.26, iva: 16 };
+  function n(id) { var v = Number(String($(id).value).replace(/[^\d.\-]/g, '')); return isFinite(v) ? v : 0; }
+  function calcular() {
+    var deb = n('c-debito'), cred = n('c-credito'), tar = deb + cred;
+    var com = Math.round((deb * TASAS.debito / 100 + cred * TASAS.credito / 100) * (1 + TASAS.iva / 100) * 100) / 100;
+    $('c-calc-t').innerHTML = '<div><span>Cobrado con tarjeta</span><span>$' + tar.toFixed(2) + '</span></div>' +
+      '<div><span>− Comisión Getnet + IVA</span><span>$' + com.toFixed(2) + '</span></div>' +
+      '<div class="tot"><span>Llega a la cuenta</span><span>$' + (tar - com).toFixed(2) + '</span></div>' +
+      '<div class="nota" style="display:block">Comisión: débito ' + TASAS.debito + ' %, crédito ' + TASAS.credito + ' %, + IVA ' + TASAS.iva + ' % sobre la comisión.</div>';
+    if (!n('c-ventas')) { $('c-calc-e').innerHTML = '<div class="nota" style="display:block">Escribe las ventas totales para cuadrar el efectivo.</div>'; return; }
+    var esp = n('c-fondo') + n('c-ventas') - tar - n('c-transf') - n('c-gastos');
+    var hay = $('c-contado').value.trim() !== '', dif = n('c-contado') - esp;
+    $('c-calc-e').innerHTML = '<div><span>Fondo + ventas</span><span>$' + (n('c-fondo') + n('c-ventas')).toFixed(2) + '</span></div>' +
+      '<div><span>− Tarjeta y transferencias</span><span>$' + (tar + n('c-transf')).toFixed(2) + '</span></div>' +
+      '<div><span>− Gastos en efectivo</span><span>$' + n('c-gastos').toFixed(2) + '</span></div>' +
+      '<div class="tot"><span>Debe haber en efectivo</span><span>$' + esp.toFixed(2) + '</span></div>' +
+      (hay ? '<div class="tot ' + (Math.abs(dif) < 0.5 ? 'dif-ok"><span>✔ Cuadra' : 'dif-mal"><span>' + (dif > 0 ? 'Sobran' : 'Faltan')) + '</span><span>$' + Math.abs(dif).toFixed(2) + '</span></div>' : '');
+  }
+  ['c-debito', 'c-credito', 'c-fondo', 'c-ventas', 'c-transf', 'c-gastos', 'c-contado'].forEach(function (id) { $(id).addEventListener('input', calcular); });
+  (function () { var d = new Date(); $('c-fecha').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
+  calcular();
+  $('b-corte').onclick = function () {
+    var btn = this; msg('m-corte', '');
+    leerArchivo($('c-foto'), function (foto) {
+      if (foto === false) return msg('m-corte', 'El archivo pesa demasiado (máximo 8 MB).');
+      llamar('cajaCorte', [K, { fecha: $('c-fecha').value, debito: $('c-debito').value, credito: $('c-credito').value, fondo: $('c-fondo').value, ventas: $('c-ventas').value,
+        transf: $('c-transf').value, gastos: $('c-gastos').value, detalle: $('c-detalle').value, contado: $('c-contado').value, notas: $('c-notas').value, foto: foto, cajera: cod() }],
+        function (r) {
+          var t = (r.corregido ? 'Corte corregido. ' : 'Corte guardado. ') + 'Llegan $' + r.neto.toFixed(2) + ' a la cuenta (comisión $' + r.comision.toFixed(2) + ').';
+          if (r.diferencia !== '') t += Math.abs(r.diferencia) < 0.5 ? ' El efectivo cuadra ✔' : (r.diferencia > 0 ? ' Sobran $' : ' Faltan $') + Math.abs(r.diferencia).toFixed(2) + ' en efectivo.';
+          msg('m-corte', t, 'ok');
+          ['c-debito', 'c-credito', 'c-fondo', 'c-ventas', 'c-transf', 'c-gastos', 'c-detalle', 'c-contado', 'c-notas', 'c-foto'].forEach(function (id) { $(id).value = ''; }); calcular(); cargar();
+        }, function (e) { msg('m-corte', e); }, btn);
+    });
+  };
+  $('b-rfc').onclick = function () {
+    llamar('cajaConsultarRFC', [K, $('r-rfc').value], function (r) {
+      var h = '<div class="msg ' + (r.valido ? 'ok' : 'err') + '" style="font-size:17px">';
+      if (!r.tipo) h += 'Ese RFC tiene ' + r.caracteres + ' caracteres. Un RFC válido tiene <b>12</b> (persona moral) o <b>13</b> (persona física).';
+      else h += '<b>' + esc(r.rfc) + '</b> es de <b>persona ' + (r.tipo === 'Moral' ? 'moral (empresa)' : 'física') + '</b>' + (r.valido ? '.' : ', pero el formato no es válido: revisa letras y fecha.');
+      if (r.generico) h += '<br>Es el RFC genérico (público en general): esa factura no lleva datos del cliente.';
+      h += '</div>';
+      if (r.cliente) h += '<div class="card" style="margin-top:10px;box-shadow:none;border:1px solid #e5dccb"><b>Ya es cliente ✔</b><div class="meta">' + esc(r.cliente.nombre) +
+        '<br>CP ' + esc(r.cliente.cp || '—') + ' · Régimen ' + esc(r.cliente.regimen) + '<br>Constancia: ' + (r.cliente.constancia ? (r.cliente.csfVencida ? 'tiene más de 6 meses' : 'al día') : 'no la tenemos') + '</div></div>';
+      else if (r.valido) h += '<p class="nota">No está registrado: es cliente nuevo y al pedir factura tendrá que subir su Constancia de Situación Fiscal.</p>';
+      $('m-rfc').innerHTML = h;
+    }, function (e) { msg('m-rfc', e); }, this);
+  };
+  $('r-rfc').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('b-rfc').click(); });
+  function salir() { CAJERA = null; try { localStorage.removeItem('ep_cajera'); } catch (e) {} $('login').style.display = 'block'; $('b-salir').style.display = 'none'; $('l-cod').value = ''; }
+  function entrado() { $('login').style.display = 'none'; $('quien').textContent = '👤 ' + CAJERA.nombre; $('b-salir').style.display = ''; }
+  $('b-salir').onclick = salir;
+  $('b-entrar').onclick = function () {
+    var c = $('l-cod').value.replace(/\D/g, '');
+    llamar('cajaEntrar', [K, c], function (r) { CAJERA = { codigo: c, nombre: r.nombre }; try { localStorage.setItem('ep_cajera', JSON.stringify(CAJERA)); } catch (e) {} entrado(); },
+      function (e) { msg('m-login', e); }, this);
+  };
+  $('l-cod').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('b-entrar').click(); });
+  if (CAJERA) entrado(); else salir();
   cargar();
 </script>
 </body>

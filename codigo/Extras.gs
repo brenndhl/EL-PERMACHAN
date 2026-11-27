@@ -367,16 +367,18 @@ function guardarAdjuntoCaja_(archivo, nombre) {
 function cajaDatos(k) {
   if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   const pagos = leerTabla_(hojaPagoProv_()).filter(r => r['ID']).reverse().slice(0, 150).map(r => ({
-    id: r['ID'], fecha: fmtFecha_(r['Fecha solicitud'], true), proveedor: r['Proveedor'], correo: r['Correo proveedor'], concepto: r['Concepto'],
+    id: r['ID'], por: r['Solicitado por'], fecha: fmtFecha_(r['Fecha solicitud'], true), proveedor: r['Proveedor'], correo: r['Correo proveedor'], concepto: r['Concepto'],
     importe: Number(r['Importe']) || 0, limite: fmtFecha_(r['Fecha límite']), adjunto: !!r['Adjunto'], estado: r['Estado'],
     pagado: fmtFecha_(r['Fecha pago'], true), comprobante: !!r['Comprobante'], aviso: r['Correo al proveedor'] }));
   const pedidos = leerTabla_(hojaPedidos_()).filter(r => r['ID']).reverse().slice(0, 300).map(r => ({
-    id: r['ID'], fecha: fmtFecha_(r['Fecha'], true), proveedor: r['Proveedor'], producto: r['Producto'], cantidad: r['Cantidad'],
+    id: r['ID'], por: r['Solicitado por'], fecha: fmtFecha_(r['Fecha'], true), proveedor: r['Proveedor'], producto: r['Producto'], cantidad: r['Cantidad'],
     notas: r['Notas'], estado: r['Estado'], pedido: fmtFecha_(r['Fecha pedido'], true) }));
   const proveedores = {};
   leerTabla_(hojaPagoProv_()).forEach(r => { if (r['Proveedor']) proveedores[r['Proveedor']] = r['Correo proveedor'] || proveedores[r['Proveedor']] || ''; });
   leerTabla_(hojaPedidos_()).forEach(r => { if (r['Proveedor'] && proveedores[r['Proveedor']] === undefined) proveedores[r['Proveedor']] = ''; });
-  return { ok: true, duena: esDuena_(k), pagos: pagos, pedidos: pedidos, hoy: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+  let cortes = { lista: [], mes: null };
+  try { cortes = cortesDatos_(); } catch (err) { Logger.log(err); }
+  return { ok: true, duena: esDuena_(k), pagos: pagos, pedidos: pedidos, cortes: cortes, hoy: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
     proveedores: Object.keys(proveedores).sort().map(p => [p, proveedores[p]]) };
 }
 
@@ -384,6 +386,8 @@ function cajaDatos(k) {
 function cajaNuevoPago(k, p) {
   if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   p = p || {};
+  const quien = quienCaja_(k, p.cajera);
+  if (!quien) return { ok: false, cajera: false, error: 'Escribe tu código de cajera.' };
   const prov = String(p.proveedor || '').trim().slice(0, 100), imp = Number(String(p.importe || '').replace(/[^\d.]/g, ''));
   if (prov.length < 2) return { ok: false, error: 'Escribe el proveedor.' };
   if (!(imp > 0)) return { ok: false, error: 'Escribe el importe.' };
@@ -394,17 +398,20 @@ function cajaNuevoPago(k, p) {
     const lim = fechaDe_(p.limite);
     agregarFila_(hojaPagoProv_(), COL_PAGOPROV, { 'ID': id, 'Fecha solicitud': new Date(), 'Proveedor': prov,
       'Correo proveedor': String(p.correo || '').trim().toLowerCase(), 'Concepto': String(p.concepto || '').trim().slice(0, 300), 'Importe': imp,
-      'Fecha límite': lim || '', 'Adjunto': guardarAdjuntoCaja_(p.adjunto, 'pago_' + id), 'Solicitado por': esCaja_(k) ? 'Caja' : 'Administración',
+      'Fecha límite': lim || '', 'Adjunto': guardarAdjuntoCaja_(p.adjunto, 'pago_' + id), 'Solicitado por': quien,
       'Estado': 'Pendiente', 'Fecha pago': '', 'Comprobante': '', 'Correo al proveedor': '' });
-    enviarCorreo_(CORREO_CONTACTO_APPS_, 'Nuevo pago a proveedor pedido por caja: ' + prov + ' — $' + imp.toFixed(2),
+    actividad_(quien, 'Pago pedido', id + ' · ' + prov + ' · $' + imp.toFixed(2));
+    enviarCorreo_(CORREO_CONTACTO_APPS_, 'Nuevo pago a proveedor pedido por ' + quien + ': ' + prov + ' — $' + imp.toFixed(2),
       '<p><b>' + esc_(prov) + '</b> · $' + imp.toFixed(2) + (lim ? ' · antes del ' + fmtFecha_(lim) : '') + '</p><p>' + esc_(p.concepto || '') + '</p><p>Ábrelo en la app, en Administración → Proveedores.</p>');
     return { ok: true, id: id };
   } finally { lock.releaseLock(); }
 }
 
 /** La cajera pide productos. items = [{proveedor, producto, cantidad, notas}] */
-function cajaNuevoPedido(k, items) {
+function cajaNuevoPedido(k, items, cajera) {
   if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const quien = quienCaja_(k, cajera);
+  if (!quien) return { ok: false, cajera: false, error: 'Escribe tu código de cajera.' };
   items = (items || []).filter(it => it && String(it.producto || '').trim()).slice(0, 60);
   if (!items.length) return { ok: false, error: 'Añade al menos un producto.' };
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
@@ -412,7 +419,8 @@ function cajaNuevoPedido(k, items) {
     const sh = hojaPedidos_(), ahora = new Date();
     items.forEach(it => agregarFila_(sh, COL_PEDIDOS, { 'ID': sigId_('SIG_PEDIDO', 'D-'), 'Fecha': ahora, 'Proveedor': String(it.proveedor || '').trim().slice(0, 100),
       'Producto': String(it.producto).trim().slice(0, 150), 'Cantidad': String(it.cantidad || '').trim().slice(0, 40), 'Notas': String(it.notas || '').trim().slice(0, 200),
-      'Solicitado por': esCaja_(k) ? 'Caja' : 'Administración', 'Estado': 'Pendiente', 'Fecha pedido': '' }));
+      'Solicitado por': quien, 'Estado': 'Pendiente', 'Fecha pedido': '' }));
+    actividad_(quien, 'Pedido', items.length + ' productos: ' + items.map(it => it.producto).join(', ').slice(0, 200));
     return { ok: true, n: items.length };
   } finally { lock.releaseLock(); }
 }
@@ -535,7 +543,8 @@ function procesarComplemento_(base, g, cfdi, procesadas, revisar) {
 function recordarComplementos() {
   const compl = complementosMap_(), facts = facturasMap_();
   const limite = Date.now() - 3 * 86400000;
-  const faltan = leerTabla_(hojaPagos_()).filter(p => p['ID'] && !compl[String(p['ID'])] && p['Marcado el'] instanceof Date && p['Marcado el'].getTime() < limite);
+  const desde = Number(PropertiesService.getScriptProperties().getProperty('COMPL_DESDE') || 0);   // los pagos marcados antes no piden complemento
+  const faltan = leerTabla_(hojaPagos_()).filter(p => p['ID'] && !compl[String(p['ID'])] && p['Marcado el'] instanceof Date && p['Marcado el'].getTime() < limite && p['Marcado el'].getTime() > desde);
   if (!faltan.length) return 'Nada pendiente';
   const tz = Session.getScriptTimeZone();
   enviarCorreo_(correoContadora_(), 'Complementos de pago pendientes (' + faltan.length + ') — ' + cfg_().NOMBRE_NEGOCIO,
@@ -548,10 +557,225 @@ function recordarComplementos() {
   return 'Recordatorio enviado: ' + faltan.length;
 }
 
+/* ============================ CORTE DE CAJA DIARIO ============================ */
+// La cajera lo llena al final del día con el cierre de la terminal Getnet (débito y crédito por separado).
+// Getnet cobra una comisión (tasa de descuento) + IVA sobre cada venta con tarjeta: a la cuenta llega el NETO.
+// Tasas por defecto: promedio de Getnet para restaurantes publicado por Banxico (débito 1.79 %, crédito 2.26 %).
+// Cámbialas por las de vuestro contrato en la hoja Config: COMISION_DEBITO, COMISION_CREDITO (en %), IVA_COMISION (16).
+// Opcional: SALDO_TARJETA_INICIAL = dinero que había en la cuenta de la tarjeta antes del primer corte.
+
+const COL_CORTES = ['Fecha', 'Tarjeta débito', 'Tarjeta crédito', 'Tarjeta', 'Comisión Getnet', 'Neto tarjeta', 'Fondo inicial', 'Ventas totales',
+  'Transferencias', 'Gastos en efectivo', 'Detalle gastos', 'Efectivo esperado', 'Efectivo contado', 'Diferencia', 'Notas', 'Foto', 'Registrado por', 'Registrado el'];
+function hojaCortes_() { return hojaCon_('Cortes de caja', COL_CORTES); }
+function num_(v) { const n = Number(String(v == null ? '' : v).replace(/[^\d.\-]/g, '')); return isFinite(n) ? Math.round(n * 100) / 100 : 0; }
+function r2_(n) { return Math.round(n * 100) / 100; }
+function ymd_(d) { return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd'); }
+
+function tasasGetnet_() {
+  const c = cfg_();
+  const t = (k, d) => { const v = Number(String(c[k] == null ? '' : c[k]).replace(',', '.')); return isFinite(v) && v > 0 ? v : d; };
+  return { debito: t('COMISION_DEBITO', 1.79), credito: t('COMISION_CREDITO', 2.26), iva: t('IVA_COMISION', 16) };
+}
+function comisionGetnet_(deb, cred) {
+  const t = tasasGetnet_();
+  return r2_((deb * t.debito / 100 + cred * t.credito / 100) * (1 + t.iva / 100));
+}
+
+function corteFila_(r) {
+  const f = r['Fecha'] instanceof Date ? ymd_(r['Fecha']) : String(r['Fecha'] || '');
+  return { fecha: f, debito: num_(r['Tarjeta débito']), credito: num_(r['Tarjeta crédito']), tarjeta: num_(r['Tarjeta']), comision: num_(r['Comisión Getnet']),
+    neto: num_(r['Neto tarjeta']), fondo: num_(r['Fondo inicial']), ventas: num_(r['Ventas totales']), transf: num_(r['Transferencias']),
+    gastos: num_(r['Gastos en efectivo']), detalle: r['Detalle gastos'] || '', esperado: num_(r['Efectivo esperado']),
+    contado: r['Efectivo contado'] === '' ? null : num_(r['Efectivo contado']), diferencia: num_(r['Diferencia']), notas: r['Notas'] || '', foto: !!r['Foto'], por: r['Registrado por'] || '' };
+}
+
+/** Guarda (o corrige) el corte de un día.
+ *  c = {fecha:'yyyy-mm-dd', debito, credito, fondo, ventas, transf, gastos, detalle, contado, notas, foto:{base64,tipo}} */
+function cajaCorte(k, c) {
+  if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  c = c || {};
+  const quien = quienCaja_(k, c.cajera);
+  if (!quien) return { ok: false, cajera: false, error: 'Escribe tu código de cajera.' };
+  const fecha = fechaDe_(c.fecha) || new Date();
+  const hoy = new Date(); hoy.setHours(23, 59, 59, 999);
+  if (fecha > hoy) return { ok: false, error: 'La fecha del corte no puede ser futura.' };
+  const v = { deb: num_(c.debito), cred: num_(c.credito), fondo: num_(c.fondo), ventas: num_(c.ventas), transf: num_(c.transf), gastos: num_(c.gastos), contado: num_(c.contado) };
+  const tarjeta = r2_(v.deb + v.cred);
+  if (!(tarjeta > 0) && !(v.ventas > 0)) return { ok: false, error: 'Escribe lo que entró con tarjeta (débito y crédito) o las ventas del día.' };
+  if (v.ventas > 0 && tarjeta + v.transf > v.ventas) return { ok: false, error: 'Tarjeta + transferencias no pueden ser más que las ventas totales.' };
+  const comision = comisionGetnet_(v.deb, v.cred), neto = r2_(tarjeta - comision);
+  const hayEfectivo = v.ventas > 0 && String(c.contado == null ? '' : c.contado).trim() !== '';
+  const esperado = v.ventas > 0 ? r2_(v.fondo + v.ventas - tarjeta - v.transf - v.gastos) : '';
+  const dif = hayEfectivo ? r2_(v.contado - esperado) : '';
+  const lock = LockService.getScriptLock(); lock.waitLock(30000);
+  try {
+    const sh = hojaCortes_(), clave = ymd_(fecha);
+    const fila = { 'Fecha': new Date(clave + 'T12:00:00'), 'Tarjeta débito': v.deb, 'Tarjeta crédito': v.cred, 'Tarjeta': tarjeta, 'Comisión Getnet': comision,
+      'Neto tarjeta': neto, 'Fondo inicial': v.fondo, 'Ventas totales': v.ventas || '', 'Transferencias': v.transf, 'Gastos en efectivo': v.gastos,
+      'Detalle gastos': String(c.detalle || '').trim().slice(0, 300), 'Efectivo esperado': esperado, 'Efectivo contado': hayEfectivo ? v.contado : '',
+      'Diferencia': dif, 'Notas': String(c.notas || '').trim().slice(0, 300), 'Registrado por': quien, 'Registrado el': new Date() };
+    if (c.foto && c.foto.base64) fila['Foto'] = guardarArchivo_(c.foto, 'corte_' + clave);
+    const vals = sh.getDataRange().getValues();
+    let n = -1;
+    for (let i = 1; i < vals.length; i++) if (vals[i][0] instanceof Date && ymd_(vals[i][0]) === clave) n = i + 1;
+    if (n > 0) actualizarFila_(sh, COL_CORTES, n, fila); else agregarFila_(sh, COL_CORTES, fila);
+    const saldo = saldoTarjeta_();
+    const m = x => '$' + Number(x).toFixed(2);
+    const t = tasasGetnet_();
+    const filasCorreo = [['Débito', m(v.deb)], ['Crédito', m(v.cred)], ['Total tarjeta', '<b>' + m(tarjeta) + '</b>'],
+      ['− Comisión Getnet + IVA', m(comision) + ' <small>(débito ' + t.debito + ' %, crédito ' + t.credito + ' %, IVA ' + t.iva + ' %)</small>'],
+      ['= Llega a la cuenta', '<b>' + m(neto) + '</b>'], ['Dinero de tarjeta acumulado', '<b>' + m(saldo.total) + '</b>']];
+    if (v.ventas > 0) filasCorreo.push(['Ventas totales', m(v.ventas)], ['Efectivo esperado', m(esperado)]);
+    if (hayEfectivo) filasCorreo.push(['Efectivo contado', m(v.contado)], ['Diferencia', '<b style="color:' + (Math.abs(dif) < 0.5 ? '#1e6b3a' : '#b3261e') + '">' + (dif > 0 ? '+' : '') + m(dif) + '</b>']);
+    if (fila['Notas']) filasCorreo.push(['Notas', esc_(fila['Notas'])]);
+    enviarCorreo_(CORREO_CONTACTO_APPS_, 'Corte ' + Utilities.formatDate(fila['Fecha'], Session.getScriptTimeZone(), 'dd/MM/yyyy') + ' — tarjeta ' + m(tarjeta) + ', llegan ' + m(neto) +
+      (hayEfectivo && Math.abs(dif) >= 0.5 ? ' — ' + (dif > 0 ? 'sobran ' : 'faltan ') + m(Math.abs(dif)) + ' en efectivo' : ''),
+      '<table border="1" cellpadding="6" style="border-collapse:collapse">' + filasCorreo.map(r => '<tr><td>' + r[0] + '</td><td>' + r[1] + '</td></tr>').join('') + '</table>' +
+      (n > 0 ? '<p>(Es una corrección de un corte que ya estaba guardado.)</p>' : ''));
+    actividad_(quien, n > 0 ? 'Corte corregido' : 'Corte', clave + ' · tarjeta $' + tarjeta.toFixed(2));
+    return { ok: true, tarjeta: tarjeta, comision: comision, neto: neto, saldo: saldo.total, esperado: esperado, diferencia: dif, corregido: n > 0 };
+  } finally { lock.releaseLock(); }
+}
+
+/** Dinero de tarjeta acumulado = saldo inicial (Config) + netos de todos los cortes. */
+function saldoTarjeta_() {
+  const ini = num_(cfg_().SALDO_TARJETA_INICIAL);
+  const netos = leerTabla_(hojaCortes_()).reduce((a, r) => a + num_(r['Neto tarjeta']), 0);
+  return { inicial: ini, total: r2_(ini + netos) };
+}
+
+/** Cortes recientes, resumen del mes y dinero de tarjeta acumulado (para Caja y para el panel). */
+function cortesDatos_() {
+  const filas = leerTabla_(hojaCortes_()).filter(r => r['Fecha'] instanceof Date).sort((a, b) => b['Fecha'].getTime() - a['Fecha'].getTime());
+  const mes = ymd_(new Date()).slice(0, 7);
+  const delMes = filas.filter(r => ymd_(r['Fecha']).slice(0, 7) === mes).map(corteFila_);
+  const sum = key => r2_(delMes.reduce((a, x) => a + (Number(x[key]) || 0), 0));
+  return { lista: filas.slice(0, 62).map(corteFila_), tasas: tasasGetnet_(), saldo: saldoTarjeta_(),
+    mes: { dias: delMes.length, tarjeta: sum('tarjeta'), comision: sum('comision'), neto: sum('neto'), ventas: sum('ventas'), gastos: sum('gastos'), diferencia: sum('diferencia') } };
+}
+
+/** Vista previa del cálculo (para la pantalla, sin guardar). */
+function cajaTasas(k) {
+  if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  return { ok: true, tasas: tasasGetnet_() };
+}
+
+function cajaCorteFoto(k, fecha) {
+  if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const r = leerTabla_(hojaCortes_()).filter(x => x['Fecha'] instanceof Date && ymd_(x['Fecha']) === String(fecha))[0];
+  const b = r ? blobDeUrl_(r['Foto'], 'Corte_' + fecha) : null;
+  if (!b) return { ok: false, error: 'No hay foto.' };
+  return { ok: true, tipo: b.getContentType(), nombre: b.getName(), base64: Utilities.base64Encode(b.getBytes()) };
+}
+
+/* ============================ CAJA: CONSULTAR RFC ============================ */
+
+/** La cajera consulta si un RFC es de persona física o moral y si ya es cliente. */
+function cajaConsultarRFC(k, texto) {
+  if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const rfc = normalizarRFC(texto);
+  if (!rfc) return { ok: false, error: 'Escribe un RFC.' };
+  const valido = rfcValido(rfc);
+  const tipo = rfc.length === 12 ? 'Moral' : rfc.length === 13 ? 'Física' : '';
+  const c = valido ? clienteCompleto_(rfc) : null;
+  const d = c ? c.datos : null;
+  const reg = d ? REGIMENES.filter(x => x[0] === String(d['Régimen fiscal']))[0] : null;
+  return { ok: true, rfc: rfc, valido: valido, tipo: tipo, caracteres: rfc.length, generico: rfc === 'XAXX010101000' || rfc === 'XEXX010101000',
+    cliente: d ? { nombre: d['Nombre o razón social'], cp: String(d['CP fiscal'] || ''), regimen: reg ? reg[0] + ' — ' + reg[1] : String(d['Régimen fiscal'] || '—'),
+      constancia: !!d['Constancia'], csfVencida: csfVencida_(d) } : null };
+}
+
+/** Manda a elpermachan@gmail.com el enlace de la app de la cajera (para reenviárselo por WhatsApp). */
+function enviarEnlaceCaja() {
+  const u = enlaceAppCaja();
+  enviarCorreo_(CORREO_CONTACTO_APPS_, 'Enlace de la app para la cajera — ' + cfg_().NOMBRE_NEGOCIO,
+    '<p>Este es el enlace de la cajera. Mándaselo por WhatsApp y que lo abra <b>una sola vez en su móvil</b> (luego que instale la app desde ahí):</p>' +
+    '<p style="font-size:16px"><a href="' + esc_(u) + '">' + esc_(u) + '</a></p>' +
+    '<p>En su móvil la última pestaña se llamará <b>🧾 Caja</b>: pagos a proveedores, pedidos, corte del día y consultar RFC.</p>' +
+    '<p>Si algún día se reenvía por error, ejecuta <i>cambiarClaveCaja</i> y el enlace viejo deja de funcionar.</p>');
+  return 'Enlace enviado a ' + CORREO_CONTACTO_APPS_;
+}
+
+/* ============================ CAJERAS ============================ */
+// Cada cajera tiene su código de 4 cifras. Lo escribe una vez en su móvil y así queda registrado
+// quién pide cada pago, cada pedido y cada corte. La administradora las da de alta en el panel.
+
+const COL_CAJERAS = ['Código', 'Nombre', 'Activa', 'Alta', 'Último uso'];
+const COL_ACTIV = ['Fecha', 'Cajera', 'Acción', 'Detalle'];
+function hojaCajeras_() { return hojaCon_('Cajeras', COL_CAJERAS); }
+function hojaActiv_() { return hojaCon_('Actividad caja', COL_ACTIV); }
+
+function cajeraPorCodigo_(codigo) {
+  codigo = String(codigo || '').replace(/\D/g, '');
+  if (!codigo) return null;
+  const sh = hojaCajeras_(), v = sh.getDataRange().getValues();
+  for (let i = 1; i < v.length; i++) if (String(v[i][0]).replace(/\D/g, '') === codigo && v[i][2] !== 'No') return { fila: i + 1, nombre: String(v[i][1]) };
+  return null;
+}
+
+/** Nombre de quien hace la acción: la cajera por su código, o "Administración" si es la dueña. */
+function quienCaja_(k, codigo) {
+  const c = cajeraPorCodigo_(codigo);
+  if (c) { try { hojaCajeras_().getRange(c.fila, 5).setValue(new Date()); } catch (e) { /* sin fecha */ } return c.nombre; }
+  return esDuena_(k) ? 'Administración' : '';
+}
+
+function actividad_(quien, accion, detalle) {
+  try { agregarFila_(hojaActiv_(), COL_ACTIV, { 'Fecha': new Date(), 'Cajera': quien, 'Acción': accion, 'Detalle': String(detalle || '').slice(0, 300) }); } catch (e) { Logger.log(e); }
+}
+
+/** La cajera escribe su código en el móvil. */
+function cajaEntrar(k, codigo) {
+  if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const cache = CacheService.getScriptCache(), n = Number(cache.get('cajint') || 0);
+  if (n > 20) return { ok: false, error: 'Demasiados intentos. Espera 15 minutos.' };
+  const c = cajeraPorCodigo_(codigo);
+  if (!c) { cache.put('cajint', String(n + 1), 900); return { ok: false, error: 'Código incorrecto. Pídeselo a Brenda.' }; }
+  hojaCajeras_().getRange(c.fila, 5).setValue(new Date());
+  actividad_(c.nombre, 'Entró en la app', '');
+  return { ok: true, nombre: c.nombre };
+}
+
+/** Panel: cajeras, qué ha hecho cada una (últimos 30 días) y actividad reciente. */
+function panelCajeras(k) {
+  if (!esDuena_(k)) return { ok: false, error: 'Solo la administradora.' };
+  const hace30 = Date.now() - 30 * 86400000;
+  const act = leerTabla_(hojaActiv_()).filter(r => r['Fecha'] instanceof Date);
+  const cajeras = leerTabla_(hojaCajeras_()).filter(r => r['Nombre']).map(r => {
+    const suyas = act.filter(a => a['Cajera'] === r['Nombre'] && a['Fecha'].getTime() > hace30);
+    const cuenta = t => suyas.filter(a => String(a['Acción']).indexOf(t) === 0).length;
+    return { codigo: String(r['Código']), nombre: r['Nombre'], activa: r['Activa'] !== 'No', alta: fmtFecha_(r['Alta']), ultimo: fmtFecha_(r['Último uso'], true),
+      pagos: cuenta('Pago'), pedidos: cuenta('Pedido'), cortes: cuenta('Corte'), entradas: cuenta('Entró') };
+  });
+  return { ok: true, cajeras: cajeras, actividad: act.slice(-80).reverse().map(a => ({ fecha: fmtFecha_(a['Fecha'], true), cajera: a['Cajera'], accion: a['Acción'], detalle: a['Detalle'] })) };
+}
+
+/** Alta o edición de una cajera. c = {codigo? (si se edita), nombre, activa} */
+function panelCajeraGuardar(k, c) {
+  if (!esDuena_(k)) return { ok: false, error: 'Solo la administradora.' };
+  c = c || {};
+  const nombre = String(c.nombre || '').trim().slice(0, 60);
+  if (nombre.length < 2) return { ok: false, error: 'Escribe el nombre de la cajera.' };
+  const sh = hojaCajeras_(), v = sh.getDataRange().getValues();
+  if (c.codigo) {
+    for (let i = 1; i < v.length; i++) if (String(v[i][0]) === String(c.codigo)) {
+      sh.getRange(i + 1, 2, 1, 2).setValues([[nombre, c.activa === false ? 'No' : 'Sí']]);
+      return { ok: true, codigo: String(c.codigo), mensaje: 'Guardado.' };
+    }
+    return { ok: false, error: 'No encuentro esa cajera.' };
+  }
+  const usados = v.slice(1).map(r => String(r[0]));
+  let codigo;
+  do { codigo = String(Math.floor(1000 + Math.random() * 9000)); } while (usados.indexOf(codigo) >= 0);
+  sh.getRange(sh.getLastRow() + 1, 1, 1, 5).setValues([["'" + codigo, nombre, 'Sí', new Date(), '']]);
+  return { ok: true, codigo: codigo, mensaje: nombre + ' dada de alta. Su código es ' + codigo + '.' };
+}
+
 /* ============================ INSTALACIÓN ============================ */
 
 function instalarExtras() {
-  hojaComent_(); hojaPagoProv_(); hojaPedidos_(); hojaCompl_();
+  hojaComent_(); hojaPagoProv_(); hojaPedidos_(); hojaCompl_(); hojaCortes_(); hojaCajeras_(); hojaActiv_();
+  const pr = PropertiesService.getScriptProperties(); if (!pr.getProperty('COMPL_DESDE')) pr.setProperty('COMPL_DESDE', String(Date.now()));
   ['Correos extra', 'Correos quitados', 'Fecha constancia', 'Aviso CSF'].forEach(colCliente_);
   ScriptApp.getProjectTriggers().forEach(t => { if (['resumenCaja', 'recordatorioCSF', 'recordarComplementos'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('resumenCaja').timeBased().everyDays(1).atHour(9).create();
