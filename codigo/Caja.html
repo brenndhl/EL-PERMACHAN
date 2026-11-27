@@ -51,7 +51,7 @@
   </div>
 </div>
 <div id="aviso-corte">⏰ Ya son las 5: haz el corte de hoy. Toca aquí.</div>
-<div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button><button data-t="corte">🧮 Corte</button><button data-t="rfc">🔎 RFC</button></div>
+<div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button><button data-t="corte">🧮 Corte</button><button data-t="rfc">🔎 RFC</button><button data-t="resp">💬 Respuestas</button></div>
 <main>
   <section id="t-pagos">
     <div class="card">
@@ -123,12 +123,20 @@
       <div id="m-rfc"></div>
     </div>
   </section>
+  <section id="t-resp" class="oculto">
+    <div class="card">
+      <h2>Ayuda para responder mensajes</h2>
+      <p class="nota">Toca lo que te escribió el cliente. Te digo qué responder. Con «Copiar» lo pegas en WhatsApp y cambias lo que haga falta.</p>
+      <div id="l-resp"></div>
+    </div>
+  </section>
 </main>
 <script>
   var K = <?= clave ?>, D = null, CAJERA = null;
   try { CAJERA = JSON.parse(localStorage.getItem('ep_cajera') || 'null'); } catch (e) { CAJERA = null; }
   function cod() { return CAJERA ? CAJERA.codigo : ''; }
   function $(id) { return document.getElementById(id); }
+  function mxn(x) { return '$' + Number(x || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MXN'; }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
   function msg(id, t, tipo) { $(id).innerHTML = t ? '<div class="msg ' + (tipo || 'err') + '">' + esc(t) + '</div>' : ''; }
   function llamar(fn, args, ok, fail, btn) {
@@ -141,15 +149,41 @@
   document.querySelector('.tabs').onclick = function (ev) {
     var b = ev.target.closest('button'); if (!b) return;
     Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle('on', x === b); });
-    ['pagos', 'pedidos', 'corte', 'rfc'].forEach(function (t) { $('t-' + t).classList.toggle('oculto', b.dataset.t !== t); });
+    ['pagos', 'pedidos', 'corte', 'rfc', 'resp'].forEach(function (t) { $('t-' + t).classList.toggle('oculto', b.dataset.t !== t); });
   };
+
+
+  var RESPUESTAS = [
+    ['🧾 Quiere una factura', 'Pide factura, o pregunta cómo hacerla', 'Hola, con gusto. Puede pedir su factura desde nuestra app: escriba su RFC, el folio del ticket (abajo a la derecha, por ejemplo #1-48349), la forma de pago y suba una foto del ticket. Le llegará un correo confirmando que la recibimos. Normalmente tarda de 1 a 3 días hábiles. ¡Gracias por visitarnos!'],
+    ['📄 ¿Constancia fiscal?', 'Pregunta si debe mandar su Constancia de Situación Fiscal', 'Solo la primera vez. Si ya le hemos facturado antes, ya tenemos sus datos y no hace falta enviarla. Cada 6 meses le pediremos que la actualice desde Mis facturas → Mis datos.'],
+    ['⏳ ¿Cuánto tarda?', 'Pregunta por su factura o dice que no le ha llegado', 'Las facturas tardan normalmente de 1 a 3 días hábiles. Cuando esté lista le llega un correo «¡Ya está tu factura!» y también la puede descargar en la app, en Mis facturas. Si ya pasaron más de 3 días hábiles, ¿me confirma su RFC y el folio del ticket para revisarlo?'],
+    ['📥 No encuentra su factura', 'No sabe dónde ver o descargar sus facturas', 'En la app entre a Mis facturas, escriba su RFC, elija su correo y ponga el código de 6 cifras que le enviamos. Ahí verá cada factura con los botones para bajar el PDF y el XML.'],
+    ['✉️ No le llega el código', 'Dice que no recibe el código o el correo', 'Revise por favor la carpeta de spam o promociones. El código caduca a los 15 minutos y puede pedir otro. Si sigue sin llegar, dígame el correo que usó y lo revisamos.'],
+    ['✏️ Se equivocó en sus datos', 'Datos fiscales incorrectos', 'No hay problema. Entre a Mis facturas → Mis datos, corríjalos y suba su constancia actualizada. Los revisamos antes de su próxima factura.'],
+    ['❌ Le rechazaron la solicitud', 'Pregunta por qué no se hizo su factura', 'En el correo que le enviamos y en Mis facturas aparece el motivo (por ejemplo, ticket de otro mes o RFC que no coincide). Corrija ese dato y vuelva a pedirla. Si necesita ayuda, escríbame el motivo que le aparece.'],
+    ['🔎 Otra cosa / no sé', 'Pregunta algo que no está aquí', 'Gracias por escribirnos. Déjeme revisarlo y le respondo en cuanto tenga la información. (Avisa a Brenda si no sabes qué contestar.)']
+  ];
+  function pintarResp() {
+    $('l-resp').innerHTML = RESPUESTAS.map(function (r, i) {
+      return '<details style="margin:8px 0"><summary><b>' + esc(r[0]) + '</b><div class="nota">El cliente: ' + esc(r[1]) + '</div></summary>' +
+        '<textarea id="rs-' + i + '" style="width:100%;min-height:120px;margin-top:8px;font-size:16px;padding:10px;border:1px solid #c9bfa8;border-radius:8px">' + esc(r[2]) + '</textarea>' +
+        '<button class="grande" data-copiar="' + i + '">📋 Copiar respuesta</button></details>';
+    }).join('');
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('button[data-copiar]'); if (!b) return;
+    var t = $('rs-' + b.dataset.copiar); t.select();
+    var ok = function () { b.textContent = '✔ Copiado'; setTimeout(function () { b.textContent = '📋 Copiar respuesta'; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(t.value).then(ok, function () { document.execCommand('copy'); ok(); }); else { document.execCommand('copy'); ok(); }
+  });
+  pintarResp();
 
   function cargar() {
     llamar('cajaDatos', [K], function (r) {
       D = r;
       $('dl-prov').innerHTML = r.proveedores.map(function (p) { return '<option value="' + esc(p[0]) + '">'; }).join('');
       $('l-pagos').innerHTML = r.pagos.length ? r.pagos.slice(0, 30).map(function (p) {
-        return '<div class="fila"><div><b>' + esc(p.proveedor) + '</b> · $' + p.importe.toFixed(2) + '<div class="meta">' + esc(p.fecha) + (p.por ? ' · ' + esc(p.por) : '') + (p.concepto ? ' · ' + esc(p.concepto) : '') +
+        return '<div class="fila"><div><b>' + esc(p.proveedor) + '</b> · ' + mxn(p.importe) + '<div class="meta">' + esc(p.fecha) + (p.por ? ' · ' + esc(p.por) : '') + (p.concepto ? ' · ' + esc(p.concepto) : '') +
           (p.pagado ? '<br>Pagado ' + esc(p.pagado) + (p.aviso ? ' · ' + esc(p.aviso) : '') : (p.limite ? '<br>Antes del ' + esc(p.limite) : '')) + '</div></div>' +
           '<span class="chip c-' + esc(p.estado) + '">' + esc(p.estado) + '</span></div>';
       }).join('') : 'Todavía no has pedido pagos.';
@@ -163,13 +197,13 @@
       D.corteHoy = r.corteHoy; revisarHora();
       var cs = r.cortes || { lista: [] }, cl = cs.lista || [];
       if (cs.tasas) TASAS = cs.tasas;
-      if (cs.saldo) $('saldo').textContent = '$' + cs.saldo.total.toFixed(2);
-      if (cs.mes) $('saldo-mes').textContent = 'Este mes: cobrado con tarjeta $' + cs.mes.tarjeta.toFixed(2) + ' · comisión Getnet $' + cs.mes.comision.toFixed(2) + ' · llegan $' + cs.mes.neto.toFixed(2);
+      if (cs.saldo) $('saldo').textContent = mxn(cs.saldo.total);
+      if (cs.mes) $('saldo-mes').textContent = 'Este mes: cobrado con tarjeta ' + mxn(cs.mes.tarjeta) + ' · comisión Getnet ' + mxn(cs.mes.comision) + ' · llegan ' + mxn(cs.mes.neto);
       calcular();
       $('l-cortes').innerHTML = cl.length ? cl.slice(0, 31).map(function (c) {
-        var efe = c.contado === null ? '' : (Math.abs(c.diferencia) < 0.5 ? '<span class="chip c-Pagado">Efectivo cuadra</span>' : '<span class="chip c-Pendiente">' + (c.diferencia > 0 ? 'Sobra' : 'Falta') + ' $' + Math.abs(c.diferencia).toFixed(2) + '</span>');
-        return '<div class="fila"><div><b>' + esc(fechaBonita(c.fecha)) + '</b> · tarjeta $' + c.tarjeta.toFixed(2) + '<div class="meta">Comisión $' + c.comision.toFixed(2) +
-          ' · llegan <b>$' + c.neto.toFixed(2) + '</b></div></div>' + efe + '</div>';
+        var efe = c.contado === null ? '' : (Math.abs(c.diferencia) < 0.5 ? '<span class="chip c-Pagado">Efectivo cuadra</span>' : '<span class="chip c-Pendiente">' + (c.diferencia > 0 ? 'Sobra' : 'Falta') + ' ' + mxn(Math.abs(c.diferencia)) + '</span>');
+        return '<div class="fila"><div><b>' + esc(fechaBonita(c.fecha)) + '</b> · tarjeta ' + mxn(c.tarjeta) + '<div class="meta">Comisión ' + mxn(c.comision) +
+          ' · llegan <b>' + mxn(c.neto) + '</b></div></div>' + efe + '</div>';
       }).join('') : 'Todavía no hay cortes.';
     }, function (e) { $('l-pagos').innerHTML = $('l-pedidos').innerHTML = '<div class="msg err">' + esc(e) + '</div>'; });
   }
@@ -219,18 +253,18 @@
   function calcular() {
     var deb = n('c-debito'), cred = n('c-credito'), tar = deb + cred;
     var com = Math.round((deb * TASAS.debito / 100 + cred * TASAS.credito / 100) * (1 + TASAS.iva / 100) * 100) / 100;
-    $('c-calc-t').innerHTML = '<div><span>Cobrado con tarjeta</span><span>$' + tar.toFixed(2) + '</span></div>' +
-      '<div><span>− Comisión Getnet + IVA</span><span>$' + com.toFixed(2) + '</span></div>' +
-      '<div class="tot"><span>Llega a la cuenta</span><span>$' + (tar - com).toFixed(2) + '</span></div>' +
+    $('c-calc-t').innerHTML = '<div><span>Cobrado con tarjeta</span><span>' + mxn(tar) + '</span></div>' +
+      '<div><span>− Comisión Getnet + IVA</span><span>' + mxn(com) + '</span></div>' +
+      '<div class="tot"><span>Llega a la cuenta</span><span>' + mxn(tar - com) + '</span></div>' +
       '<div class="nota" style="display:block">Comisión: débito ' + TASAS.debito + ' %, crédito ' + TASAS.credito + ' %, + IVA ' + TASAS.iva + ' % sobre la comisión.</div>';
     if (!n('c-ventas')) { $('c-calc-e').innerHTML = '<div class="nota" style="display:block">Escribe las ventas totales para cuadrar el efectivo.</div>'; return; }
     var esp = n('c-fondo') + n('c-ventas') - tar - n('c-transf') - n('c-gastos');
     var hay = $('c-contado').value.trim() !== '', dif = n('c-contado') - esp;
-    $('c-calc-e').innerHTML = '<div><span>Fondo + ventas</span><span>$' + (n('c-fondo') + n('c-ventas')).toFixed(2) + '</span></div>' +
-      '<div><span>− Tarjeta y transferencias</span><span>$' + (tar + n('c-transf')).toFixed(2) + '</span></div>' +
-      '<div><span>− Gastos en efectivo</span><span>$' + n('c-gastos').toFixed(2) + '</span></div>' +
-      '<div class="tot"><span>Debe haber en efectivo</span><span>$' + esp.toFixed(2) + '</span></div>' +
-      (hay ? '<div class="tot ' + (Math.abs(dif) < 0.5 ? 'dif-ok"><span>✔ Cuadra' : 'dif-mal"><span>' + (dif > 0 ? 'Sobran' : 'Faltan')) + '</span><span>$' + Math.abs(dif).toFixed(2) + '</span></div>' : '');
+    $('c-calc-e').innerHTML = '<div><span>Fondo + ventas</span><span>' + mxn(n('c-fondo') + n('c-ventas')) + '</span></div>' +
+      '<div><span>− Tarjeta y transferencias</span><span>' + mxn(tar + n('c-transf')) + '</span></div>' +
+      '<div><span>− Gastos en efectivo</span><span>' + mxn(n('c-gastos')) + '</span></div>' +
+      '<div class="tot"><span>Debe haber en efectivo</span><span>' + mxn(esp) + '</span></div>' +
+      (hay ? '<div class="tot ' + (Math.abs(dif) < 0.5 ? 'dif-ok"><span>✔ Cuadra' : 'dif-mal"><span>' + (dif > 0 ? 'Sobran' : 'Faltan')) + '</span><span>' + mxn(Math.abs(dif)) + '</span></div>' : '');
   }
   ['c-debito', 'c-credito', 'c-fondo', 'c-ventas', 'c-transf', 'c-gastos', 'c-contado'].forEach(function (id) { $(id).addEventListener('input', calcular); });
   (function () { var d = new Date(); $('c-fecha').value = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); })();
@@ -242,8 +276,8 @@
       llamar('cajaCorte', [K, { fecha: $('c-fecha').value, debito: $('c-debito').value, credito: $('c-credito').value, fondo: $('c-fondo').value, ventas: $('c-ventas').value,
         transf: $('c-transf').value, gastos: $('c-gastos').value, detalle: $('c-detalle').value, contado: $('c-contado').value, notas: $('c-notas').value, foto: foto, cajera: cod() }],
         function (r) {
-          var t = (r.corregido ? 'Corte corregido. ' : 'Corte guardado. ') + 'Llegan $' + r.neto.toFixed(2) + ' a la cuenta (comisión $' + r.comision.toFixed(2) + ').';
-          if (r.diferencia !== '') t += Math.abs(r.diferencia) < 0.5 ? ' El efectivo cuadra ✔' : (r.diferencia > 0 ? ' Sobran $' : ' Faltan $') + Math.abs(r.diferencia).toFixed(2) + ' en efectivo.';
+          var t = (r.corregido ? 'Corte corregido. ' : 'Corte guardado. ') + 'Llegan ' + mxn(r.neto) + ' a la cuenta (comisión ' + mxn(r.comision) + ').';
+          if (r.diferencia !== '') t += Math.abs(r.diferencia) < 0.5 ? ' El efectivo cuadra ✔' : (r.diferencia > 0 ? ' Sobran ' : ' Faltan ') + mxn(Math.abs(r.diferencia)) + ' en efectivo.';
           msg('m-corte', t, 'ok');
           ['c-debito', 'c-credito', 'c-fondo', 'c-ventas', 'c-transf', 'c-gastos', 'c-detalle', 'c-contado', 'c-notas', 'c-foto'].forEach(function (id) { $(id).value = ''; }); calcular(); cargar();
         }, function (e) { msg('m-corte', e); }, btn);

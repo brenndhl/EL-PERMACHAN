@@ -70,7 +70,10 @@
   <button class="seg on" data-s="facturas">🧾 Facturas</button>
   <button class="seg" data-s="clientes">👥 Clientes</button>
   <button class="seg" data-s="coment">💬 Opiniones<span class="nb" id="nb-coment" style="display:none"></span></button>
-  <button class="seg" data-s="prov" id="seg-prov" style="display:none">💸 Pagos, pedidos y cortes<span class="nb" id="nb-prov" style="display:none"></span></button>
+  <button class="seg seg-prov" data-s="prov" data-pp="pagos" style="display:none">💸 Pagos<span class="nb" id="nb-pagos" style="display:none"></span></button>
+  <button class="seg seg-prov" data-s="prov" data-pp="pedidos" style="display:none">📦 Pedidos<span class="nb" id="nb-pedidos" style="display:none"></span></button>
+  <button class="seg seg-prov" data-s="prov" data-pp="cortes" style="display:none">🧮 Cortes</button>
+  <button class="seg seg-prov" data-s="prov" data-pp="cajeras" style="display:none">👩 Cajeras</button>
 </nav>
 <main>
 <div class="seccion on" id="s-facturas">
@@ -106,10 +109,6 @@
 </div>
 
 <div class="seccion" id="s-prov">
-  <div class="tabs"><button class="seg" style="color:var(--c);background:#fff;border:1px solid #c9d1d4" data-pv="pagos" id="pv-pagos">💸 Pagos</button>
-    <button class="seg" style="color:var(--c);background:#fff;border:1px solid #c9d1d4" data-pv="pedidos" id="pv-pedidos">📦 Pedidos</button>
-    <button class="seg" style="color:var(--c);background:#fff;border:1px solid #c9d1d4" data-pv="cortes" id="pv-cortes">🧮 Cortes</button>
-    <button class="seg" style="color:var(--c);background:#fff;border:1px solid #c9d1d4" data-pv="cajeras" id="pv-cajeras">👩 Cajeras</button></div>
   <div class="acc" style="margin:0 0 10px"><button class="x-ok" id="nv-pago">＋ Pago</button><button class="x-em" id="nv-pedido">＋ Pedido</button><button class="x-re" id="nv-corte">＋ Corte</button></div>
   <div id="nv-form"></div>
   <div id="prov-lista"><div class="card">Cargando…</div></div>
@@ -118,6 +117,7 @@
 <script>
   var K = <?= clave ?>, DUENA = <?= esDuena_(clave) ?>;
   var EST = { estado: 'Pendiente', texto: '' }, DATOS = null, timer = null;
+  function mxn(x) { return '$' + Number(x || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MXN'; }
   function $(id) { return document.getElementById(id); }
   function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
 
@@ -307,9 +307,8 @@
 
   document.addEventListener('click', function (ev) {
     var el = ev.target.closest ? ev.target : null; if (!el) return;
-    var sg = el.closest('.seg[data-s]'); if (sg) { seccion(sg.dataset.s); return; }
-    var pv = el.closest('[data-pv]'); if (pv) { PV = pv.dataset.pv; pintarProv(); return; }
-    var tab = el.closest('.tab[data-e]'); if (tab) { EST.estado = tab.dataset.e; cargar(); return; }
+    var sg = el.closest('.seg[data-s]'); if (sg) { if (sg.dataset.pp) PV = sg.dataset.pp; seccion(sg.dataset.s); return; }
+        var tab = el.closest('.tab[data-e]'); if (tab) { EST.estado = tab.dataset.e; cargar(); return; }
     if (el.closest('#s-facturas') == null) return;
     var vb = el.closest('button[data-ver]'); if (vb) { ver(Number(vb.dataset.ver), vb.dataset.c, vb); return; }
     var ab = el.closest('button[data-a]'); if (ab) { cambiar(Number(ab.dataset.i), ab.dataset.a, ab); return; }
@@ -324,7 +323,7 @@
 
   /* ===== Secciones ===== */
   function seccion(s) {
-    Array.prototype.forEach.call(document.querySelectorAll('.seg[data-s]'), function (b) { b.classList.toggle('on', b.dataset.s === s); });
+    Array.prototype.forEach.call(document.querySelectorAll('.seg[data-s]'), function (b) { b.classList.toggle('on', b.dataset.s === s && (!b.dataset.pp || b.dataset.pp === PV)); });
     Array.prototype.forEach.call(document.querySelectorAll('.seccion'), function (d) { d.classList.toggle('on', d.id === 's-' + s); });
     if (s === 'clientes') buscarClientes(); else if (s === 'coment') cargarComent(); else if (s === 'prov') cargarProv();
   }
@@ -445,17 +444,17 @@
     run('cajaDatos', [K], function (r) { CAJA = r; marcarNb(); pintarProv(); }, $('prov-lista'));
   }
   function marcarNb() {
-    var n = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }).length + CAJA.pedidos.filter(function (p) { return p.estado !== 'Pedido'; }).length;
-    var nb = $('nb-prov'); nb.style.display = n ? '' : 'none'; nb.textContent = n;
+    var np = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }).length, nd = CAJA.pedidos.filter(function (p) { return p.estado !== 'Pedido'; }).length;
+    [['pagos', np], ['pedidos', nd]].forEach(function (x) { var nb = $('nb-' + x[0]); nb.style.display = x[1] ? '' : 'none'; nb.textContent = x[1]; });
   }
+  function seccion_marca() { Array.prototype.forEach.call(document.querySelectorAll('.seg[data-pp]'), function (b) { b.classList.toggle('on', b.dataset.pp === PV); }); }
   function pintarProv() {
     if (!CAJA) return;
-    $('pv-pagos').style.background = PV === 'pagos' ? 'var(--c)' : '#fff'; $('pv-pagos').style.color = PV === 'pagos' ? '#fff' : 'var(--c)';
-    ['pagos', 'pedidos', 'cortes', 'cajeras'].forEach(function (t) { $('pv-' + t).style.background = PV === t ? 'var(--c)' : '#fff'; $('pv-' + t).style.color = PV === t ? '#fff' : 'var(--c)'; });
+    seccion_marca();
     if (PV === 'cajeras') { pintarCajeras(); return; }
     if (PV === 'cortes') {
       var cs = CAJA.cortes || { lista: [], mes: null }, mm = cs.mes || { dias: 0, tarjeta: 0, comision: 0, neto: 0, ventas: 0, gastos: 0, diferencia: 0 };
-      var $f = function (x) { return '$' + Number(x || 0).toFixed(2); };
+      var $f = mxn;
       var fb = function (f) { var q = String(f).split('-'); return q.length === 3 ? q[2] + '/' + q[1] + '/' + q[0] : f; };
       var ts = cs.tasas || {};
       $('prov-lista').innerHTML = '<div class="kpis">' + kpi($f(cs.saldo ? cs.saldo.total : 0), '💳 Dinero de tarjeta acumulado', false) + kpi($f(mm.tarjeta), 'Tarjeta este mes (' + mm.dias + ' días)', false) +
@@ -472,17 +471,17 @@
             return '<tr><td><b>' + fb(c.fecha) + '</b>' + (c.foto ? ' <a href="#" data-cfoto="' + c.fecha + '">📷</a>' : '') + (c.notas || c.detalle ? '<div class="meta">' + esc([c.detalle, c.notas].filter(String).join(' · ')) + '</div>' : '') +
               '</td><td>' + $f(c.debito) + '</td><td>' + $f(c.credito) + '</td><td>' + $f(c.comision) + '</td><td><b>' + $f(c.neto) + '</b></td><td>' + efe + '</td></tr>';
           }).join('') + '</table></div><div id="cfoto-v"></div>' : '<div class="card vacio">Todavía no hay cortes. Los llena la cajera al cerrar (Caja → 🧮 Corte), o tú con «＋ Corte».</div>');
-      $('sd-ok').onclick = function () { run('panelSaldoTarjeta', [K, $('sd-v').value], function (r) { $('sd-r').innerHTML = '<div class="aviso ok">Guardado. Dinero de tarjeta: $' + r.saldo.toFixed(2) + '</div>'; setTimeout(cargarProv, 1200); }, $('sd-r')); };
+      $('sd-ok').onclick = function () { run('panelSaldoTarjeta', [K, $('sd-v').value], function (r) { $('sd-r').innerHTML = '<div class="aviso ok">Guardado. Dinero de tarjeta: ' + mxn(r.saldo) + '</div>'; setTimeout(cargarProv, 1200); }, $('sd-r')); };
       $('tx-ok').onclick = function () { run('panelTasas', [K, $('tx-d').value, $('tx-c').value], function () { $('tx-r').innerHTML = '<div class="aviso ok">Comisión guardada. Se aplica a los cortes nuevos.</div>'; setTimeout(cargarProv, 1200); }, $('tx-r')); };
       return;
     }
     if (PV === 'pagos') {
       var pend = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }), hechos = CAJA.pagos.filter(function (p) { return p.estado === 'Pagado'; });
       var tot = pend.reduce(function (a, p) { return a + p.importe; }, 0);
-      $('prov-lista').innerHTML = '<div class="meta" style="margin-bottom:8px"><b>' + pend.length + ' pagos pendientes</b> · $' + tot.toFixed(2) + '. Te llega un resumen cada día a las 9:00.</div>' +
+      $('prov-lista').innerHTML = '<div class="meta" style="margin-bottom:8px"><b>' + pend.length + ' pagos pendientes</b> · ' + mxn(tot) + '. Te llega un resumen cada día a las 9:00.</div>' +
         (pend.concat(hechos.slice(0, 20)).map(function (p) {
           var i = CAJA.pagos.indexOf(p);
-          return '<div class="card"><div class="top"><div><div class="nom">' + esc(p.proveedor) + ' · $' + p.importe.toFixed(2) + '</div>' +
+          return '<div class="card"><div class="top"><div><div class="nom">' + esc(p.proveedor) + ' · ' + mxn(p.importe) + '</div>' +
             '<div class="meta">' + esc(p.id) + ' · pedido ' + esc(p.fecha) + (p.por ? ' por <b>' + esc(p.por) + '</b>' : '') + (p.limite ? ' · <b>antes del ' + esc(p.limite) + '</b>' : '') + '<br>' + esc(p.concepto || '') +
             (p.correo ? '<br>✉️ ' + esc(p.correo) : '<br>Sin correo del proveedor') + (p.pagado ? '<br>Pagado ' + esc(p.pagado) + (p.aviso ? ' · ' + esc(p.aviso) : '') : '') + '</div></div>' +
             '<span class="badge ' + (p.estado === 'Pagado' ? 'b-Enviada' : 'b-Pendiente') + '">' + esc(p.estado) + '</span></div>' +
@@ -597,10 +596,10 @@
       '<label>Notas (opcional)</label><input id="nc-n"><div class="acc"><button class="x-ok" id="nc-ok">Guardar corte</button><button class="x-re" onclick="document.getElementById(\'nv-form\').innerHTML=\'\'">Cancelar</button></div><div id="nc-r"></div></div>';
     $('nc-ok').onclick = function () {
       run('cajaCorte', [K, { fecha: $('nc-f').value, debito: $('nc-d').value, credito: $('nc-c').value, notas: $('nc-n').value }],
-        function (r) { $('nv-form').innerHTML = '<div class="aviso ok">Corte guardado: llegan $' + r.neto.toFixed(2) + ' (comisión $' + r.comision.toFixed(2) + ').</div>'; PV = 'cortes'; cargarProv(); }, $('nc-r'));
+        function (r) { $('nv-form').innerHTML = '<div class="aviso ok">Corte guardado: llegan ' + mxn(r.neto) + ' (comisión ' + mxn(r.comision) + ').</div>'; PV = 'cortes'; cargarProv(); }, $('nc-r'));
     };
   };
-  if (DUENA) { $('seg-prov').style.display = ''; run('cajaDatos', [K], function (r) { CAJA = r; marcarNb(); }, null); }
+  if (DUENA) { Array.prototype.forEach.call(document.querySelectorAll('.seg-prov'), function (b) { b.style.display = ''; }); run('cajaDatos', [K], function (r) { CAJA = r; marcarNb(); }, null); }
   run('panelComentarios', [K], function (r) { var nb = $('nb-coment'); nb.style.display = r.nuevos ? '' : 'none'; nb.textContent = r.nuevos; }, null);
   cargar();
 </script>
