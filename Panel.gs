@@ -24,6 +24,16 @@ function claveDuena_() {
 
 function esDuena_(k) { return !!k && String(k) === claveDuena_(); }
 
+/** Panel completo: la dueña (su clave) y la contadora (la clave de sus enlaces). */
+function esPanel_(k) { return esDuena_(k) || claveOk_(k); }
+
+/** Enlace para instalar la app con acceso de administración en el móvil de la contadora. */
+function enlaceAppContadora() {
+  const u = String(cfg_().URL_APP || 'https://brenndhl.github.io/EL-PERMACHAN/') + '#k=' + claveAdmin_();
+  Logger.log('App de la contadora (abrir una vez en su móvil): ' + u);
+  return u;
+}
+
 function urlPanelAdmin_() {
   const base = urlWeb_();
   return base ? base + '?k=' + encodeURIComponent(claveDuena_()) : '';
@@ -81,7 +91,7 @@ function fechaDe_(t) {
 
 /** Marca como pagada una factura "por definir" y avisa a la contadora por correo. */
 function panelMarcarPagada(k, id, fechaTxt, nota) {
-  if (!esDuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -109,7 +119,7 @@ function panelMarcarPagada(k, id, fechaTxt, nota) {
 
 /** Quita la marca de pagada (por si fue un error). No manda correo. */
 function panelQuitarPagada(k, id) {
-  if (!esDuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -126,12 +136,14 @@ function panelQuitarPagada(k, id) {
 /** Contadores + lista filtrada (máx. 200 filas).
  *  f = { estado, texto, desde:'yyyy-mm-dd', hasta:'yyyy-mm-dd', pago, cliente:RFC, porCobrar:bool } */
 function panelDatos(k, f) {
-  if (!esDuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   f = f || {};
   const tz = Session.getScriptTimeZone();
   const ahora = Date.now();
   const todas = leerTabla_(hoja_(HOJAS.SOLICITUDES)).filter(s => s['ID']);
   const pagos = pagosMap_();
+  let facts = {};
+  try { facts = facturasMap_(); } catch (e) { /* sin hoja de facturas */ }
   const fecha = s => s['Fecha solicitud'] instanceof Date ? s['Fecha solicitud'].getTime() : 0;
   const dias = s => fecha(s) ? Math.floor((ahora - fecha(s)) / 86400000) : null;
   const pagada = s => !!pagos[String(s['ID'])];
@@ -181,6 +193,7 @@ function panelDatos(k, f) {
       dias: dias(s), fechaEstado: fmt(s['Fecha estado']), fechaEmitida: fmt(s['Fecha emitida']),
       notas: s['Notas / motivo'], origen: s['Origen'], uso: s['Uso CFDI'],
       porDefinir: porDefinir_(s), pagada: !!p,
+      factura: facts[String(s['ID'])] ? (facts[String(s['ID'])]['Serie-Folio'] || 'sí') : '',
       fechaPago: p && p['Fecha pago'] instanceof Date ? Utilities.formatDate(p['Fecha pago'], tz, 'dd/MM/yyyy') : ''
     });
   });
@@ -190,7 +203,7 @@ function panelDatos(k, f) {
 
 /** Cambia el estado desde el panel. Aquí sí se puede volver a "Pendiente" (reabrir). */
 function panelCambiarEstado(k, id, estado, motivo) {
-  if (!esDuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   if (ESTADOS.indexOf(estado) < 0) return { ok: false, error: 'Estado no válido.' };
   motivo = String(motivo || '').trim().slice(0, 300);
   if (estado === 'Rechazada' && motivo.length < 3) return { ok: false, error: 'Escribe el motivo para que el cliente sepa qué corregir.' };
@@ -209,9 +222,19 @@ function panelCambiarEstado(k, id, estado, motivo) {
   } finally { lock.releaseLock(); }
 }
 
+/** Ver el PDF o XML de la factura subida por la contadora. */
+function panelFactura(k, id, tipo) {
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const f = facturasMap_()[String(id)];
+  if (!f) return { ok: false, error: 'Esta solicitud no tiene factura subida.' };
+  const b = blobDeUrl_(tipo === 'xml' ? f['XML'] : f['PDF'], 'Factura_' + (f['Serie-Folio'] || id));
+  if (!b) return { ok: false, error: 'No se pudo abrir el archivo.' };
+  return { ok: true, tipo: b.getContentType(), nombre: b.getName(), base64: Utilities.base64Encode(b.getBytes()) };
+}
+
 /** Ver ticket / constancia desde el panel. */
 function panelArchivo(k, id, cual) {
-  if (!esDuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  if (!esPanel_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   return adminArchivo(claveAdmin_(), id, cual);
 }
 

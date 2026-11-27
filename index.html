@@ -3,33 +3,104 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Facturas El Permachan</title>
-<meta name="theme-color" content="#1f4e5f">
+<title>El Permachan — Facturas</title>
+<meta name="description" content="Pide tu factura del Restaurante El Permachan y descárgala cuando quieras.">
+<meta name="theme-color" content="#141110">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Facturas EP">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="El Permachan">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="cliente-192.png">
-<link rel="apple-touch-icon" href="cliente-180.png">
+<link rel="icon" href="icono-192.png">
+<link rel="apple-touch-icon" href="icono-180.png">
 <style>
-  html, body { margin:0; height:100%; background:#f4f5f6; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
-  iframe { position:fixed; inset:0; width:100%; height:100%; border:0; padding-top:env(safe-area-inset-top); box-sizing:border-box; background:#f4f5f6; }
-  #carga { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#1f4e5f; }
-  #carga img { width:84px; height:84px; border-radius:18px; }
-  #instalar { position:fixed; left:12px; right:12px; bottom:12px; display:none; background:#1f4e5f; color:#fff; border:0; border-radius:12px; padding:14px; font-size:17px; font-weight:700; z-index:2; }
+  :root { --negro:#141110; --crema:#f3ead6; --madera:#a8774a; --nav:64px; }
+  html, body { margin:0; height:100%; background:#f5f1ea; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+  .vista { position:fixed; left:0; right:0; top:env(safe-area-inset-top); bottom:calc(var(--nav) + env(safe-area-inset-bottom)); display:none; }
+  .vista.on { display:block; }
+  .vista iframe { width:100%; height:100%; border:0; background:#f5f1ea; }
+  nav { position:fixed; left:0; right:0; bottom:0; height:calc(var(--nav) + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);
+    background:var(--negro); display:flex; border-top:2px solid var(--madera); z-index:5; }
+  nav button { flex:1; background:none; border:0; color:#b9ad97; font-size:12px; font-weight:600; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; cursor:pointer; }
+  nav button span { font-size:22px; line-height:1; }
+  nav button.on { color:var(--crema); }
+  nav button.on span { transform:scale(1.12); }
+  #b-admin { display:none; }
+  #splash { position:fixed; inset:0; background:var(--negro); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; z-index:10; transition:opacity .4s; color:var(--crema); }
+  #splash img { width:62vmin; max-width:300px; }
+  #splash small { opacity:.7; }
+  #instalar { position:fixed; left:12px; right:12px; bottom:calc(var(--nav) + env(safe-area-inset-bottom) + 12px); display:none; background:var(--madera); color:#fff; border:0; border-radius:14px; padding:14px; font-size:16px; font-weight:700; z-index:6; box-shadow:0 4px 14px rgba(0,0,0,.3); }
+  #login { position:absolute; inset:0; display:none; align-items:flex-start; justify-content:center; padding:10vh 18px 0; background:#f5f1ea; }
+  #login .caja { width:100%; max-width:400px; background:#fff; border-radius:16px; padding:20px; box-shadow:0 1px 4px rgba(0,0,0,.12); }
+  #login input { width:100%; box-sizing:border-box; font-size:17px; padding:12px; border:1px solid #cfc6b8; border-radius:10px; margin:10px 0; }
+  #login button { width:100%; padding:14px; font-size:16px; font-weight:700; border:0; border-radius:12px; background:var(--negro); color:var(--crema); }
 </style>
 </head>
 <body>
-<div id="carga"><img src="cliente-192.png" alt=""><div>Cargando…</div></div>
-<iframe id="app" title="Solicitar factura" allow="camera; clipboard-write" src="https://script.google.com/macros/s/AKfycbwhM2HebJoKMAueXn66luLed3XVVpFsgMWfH0P0aHFUUmvXursfEnXYI1NbM2L0etX3/exec"></iframe>
-<button id="instalar">📲 Instalar la app de facturas</button>
+<div id="splash"><img src="logo-512.png" alt="El Permachan"><small>Cargando…</small></div>
+
+<div class="vista" id="v-pedir"></div>
+<div class="vista" id="v-mis"></div>
+<div class="vista" id="v-admin">
+  <div id="login"><div class="caja">
+    <h2 style="margin:0 0 6px">Administración</h2>
+    <p style="color:#6b625a;margin:0">Pega tu enlace o clave de acceso. Se guarda solo en este móvil.</p>
+    <input id="clave" autocomplete="off" placeholder="Clave de acceso">
+    <button id="b-entrar">Entrar</button>
+  </div></div>
+</div>
+
+<button id="instalar">📲 Instalar la app de El Permachan</button>
+
+<nav>
+  <button id="b-pedir" data-v="pedir"><span>🧾</span>Pedir factura</button>
+  <button id="b-mis" data-v="mis"><span>📂</span>Mis facturas</button>
+  <button id="b-admin" data-v="admin"><span>🔒</span>Administración</button>
+</nav>
+
 <script>
-  document.getElementById('app').addEventListener('load', function () { document.getElementById('carga').style.display = 'none'; });
+  var EXEC = 'https://script.google.com/macros/s/AKfycbwhM2HebJoKMAueXn66luLed3XVVpFsgMWfH0P0aHFUUmvXursfEnXYI1NbM2L0etX3/exec';
+  function $(id) { return document.getElementById(id); }
+  function leer() { try { return localStorage.getItem('ep_clave') || ''; } catch (e) { return ''; } }
+  function guardar(k) { try { if (k) localStorage.setItem('ep_clave', k); else localStorage.removeItem('ep_clave'); } catch (e) {} }
+  function extraer(t) { var m = /[?&#]k=([A-Za-z0-9]+)/.exec(t) || /^([A-Za-z0-9]{20,})$/.exec(String(t).trim()); return m ? m[1] : ''; }
+
+  // Acceso de administración: se activa una vez con el enlace privado (#k=...) y queda en este móvil.
+  if (location.hash === '#salir') { guardar(''); history.replaceState(null, '', location.pathname); }
+  var deHash = extraer(location.hash);
+  if (deHash) { guardar(deHash); history.replaceState(null, '', location.pathname); }
+  var CLAVE = leer();
+  if (CLAVE) $('b-admin').style.display = 'flex';
+
+  var cargadas = {};
+  function marco(v) {
+    if (cargadas[v]) return;
+    if (v === 'admin' && !CLAVE) { $('login').style.display = 'flex'; return; }
+    var f = document.createElement('iframe');
+    f.title = v; f.allow = 'camera; clipboard-write';
+    f.src = v === 'pedir' ? EXEC : v === 'mis' ? EXEC + '?v=mis' : EXEC + '?k=' + encodeURIComponent(CLAVE);
+    f.onload = function () { var s = $('splash'); s.style.opacity = 0; setTimeout(function () { s.style.display = 'none'; }, 400); };
+    $('v-' + v).appendChild(f); cargadas[v] = true;
+  }
+  function ir(v) {
+    ['pedir', 'mis', 'admin'].forEach(function (x) { $('v-' + x).classList.toggle('on', x === v); $('b-' + x).classList.toggle('on', x === v); });
+    marco(v);
+    try { sessionStorage.setItem('ep_vista', v); } catch (e) {}
+  }
+  document.querySelector('nav').addEventListener('click', function (e) { var b = e.target.closest('button'); if (b) ir(b.dataset.v); });
+  $('b-entrar').onclick = function () {
+    var c = extraer($('clave').value); if (!c) return;
+    CLAVE = c; guardar(c); $('login').style.display = 'none'; $('b-admin').style.display = 'flex'; cargadas.admin = false; ir('admin');
+  };
+  var inicio = (location.search.match(/[?&]v=(pedir|mis|admin)/) || [])[1] || (deHash ? 'admin' : '');
+  try { inicio = inicio || sessionStorage.getItem('ep_vista') || 'pedir'; } catch (e) { inicio = inicio || 'pedir'; }
+  ir(inicio);
+  setTimeout(function () { var s = $('splash'); if (s.style.display !== 'none') { s.style.opacity = 0; setTimeout(function () { s.style.display = 'none'; }, 400); } }, 6000);
+
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
   var aviso;
   window.addEventListener('beforeinstallprompt', function (e) {
-    e.preventDefault(); aviso = e;
-    var b = document.getElementById('instalar'); b.style.display = 'block';
+    e.preventDefault(); aviso = e; var b = $('instalar'); b.style.display = 'block';
     b.onclick = function () { b.style.display = 'none'; aviso.prompt(); };
   });
 </script>

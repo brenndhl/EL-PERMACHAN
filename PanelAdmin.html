@@ -5,10 +5,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  :root { --c:#1f4e5f; --ok:#1e6b3a; --no:#b3261e; --gris:#667; }
+  :root { --c:#141110; --ok:#1e6b3a; --no:#b3261e; --gris:#667; --madera:#a8774a; }
   * { box-sizing:border-box; }
   body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#f4f5f6; color:#111; font-size:16px; line-height:1.4; }
-  header { background:var(--c); color:#fff; padding:14px 16px; font-size:19px; font-weight:700; display:flex; justify-content:space-between; align-items:center; }
+  header { border-bottom:3px solid var(--madera); background:var(--c); color:#fff; padding:14px 16px; font-size:19px; font-weight:700; display:flex; justify-content:space-between; align-items:center; }
   header button { background:rgba(255,255,255,.15); color:#fff; border:0; border-radius:8px; padding:8px 12px; font-size:15px; cursor:pointer; }
   main { max-width:900px; margin:0 auto; padding:14px; }
   .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
@@ -18,7 +18,7 @@
   .kpi.alerta .n { color:var(--no); }
   .tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px; }
   .tab { flex:0 0 auto; border:1px solid #c9d1d4; background:#fff; border-radius:999px; padding:8px 14px; font-size:15px; cursor:pointer; }
-  .tab.on { background:var(--c); color:#fff; border-color:var(--c); }
+  .tab.on { background:var(--c); color:#f3ead6; border-color:var(--c); }
   .tab b { margin-left:4px; }
   input[type=search] { width:100%; padding:12px 14px; font-size:16px; border:1px solid #c9d1d4; border-radius:10px; margin-bottom:12px; }
   .card { background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
@@ -52,7 +52,7 @@
 </style>
 </head>
 <body>
-<header><span>Panel de facturas — El Permachan</span><button id="recargar">↻ Actualizar</button></header>
+<header><span style="display:flex;align-items:center;gap:10px"><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt="" style="width:40px;height:40px;border-radius:50%;box-shadow:0 0 0 2px var(--madera)">Panel de facturas — El Permachan</span><button id="recargar">↻ Actualizar</button></header>
 <main>
   <div class="kpis" id="kpis"></div>
   <div class="tabs" id="tabs"></div>
@@ -114,7 +114,7 @@
       '<div class="meta">' + esc(s.id) + ' · ticket ' + esc(s.folio || '—') + ' · ' + esc(s.fecha) +
       (dias ? ' · <span class="' + (tarde ? 'tarde' : '') + '">' + dias + '</span>' : '') + '</div></div>' +
       '<span><span class="badge b-' + esc(s.estado) + '">' + esc(s.estado || '—') + '</span>' +
-      (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
+      (s.factura ? '<span class="pago p-pagada">🧾 Factura subida</span>' : '') + (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
       '</span></div>' +
       '<div class="det">' +
       fila('RFC', s.rfc) + fila('Correo', s.email) + fila('Forma de pago', s.pago) + fila('Uso CFDI', s.uso) +
@@ -124,6 +124,7 @@
       '<div class="acc">' +
       (s.foto ? '<button class="ver" data-ver="' + i + '" data-c="foto">📷 Ticket</button>' : '') +
       (s.constancia ? '<button class="ver" data-ver="' + i + '" data-c="constancia">📄 Constancia</button>' : '') +
+      (s.factura ? '<button class="ver" data-ver="' + i + '" data-c="fpdf">🧾 Factura PDF</button><button class="ver" data-ver="' + i + '" data-c="fxml">🧾 XML</button>' : '') +
       '</div><div class="visor" id="v' + i + '"></div>' +
       '<div class="acc">' + acciones(s, i) + '</div><div id="r' + i + '"></div></div></div>';
     return h;
@@ -217,7 +218,7 @@
   function ver(i, cual, btn) {
     var s = DATOS.lista[i], v = $('v' + i), t = btn.textContent;
     btn.disabled = true; btn.textContent = 'Abriendo…';
-    google.script.run.withSuccessHandler(function (r) {
+    var run2 = google.script.run.withSuccessHandler(function (r) {
       btn.disabled = false; btn.textContent = t;
       if (!r || r.ok === false) { v.innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
       var bin = atob(r.base64), arr = new Uint8Array(bin.length);
@@ -227,7 +228,8 @@
         '<p><a href="' + url + '" target="_blank">🔍 Abrir en grande</a> · <a href="' + url + '" download="' + esc(r.nombre) + '">⬇️ Descargar</a></p>';
     }).withFailureHandler(function (e) {
       btn.disabled = false; btn.textContent = t; v.innerHTML = '<div class="aviso no">' + esc(e && e.message) + '</div>';
-    }).panelArchivo(K, s.id, cual);
+    });
+    if (cual === 'fpdf' || cual === 'fxml') run2.panelFactura(K, s.id, cual === 'fxml' ? 'xml' : 'pdf'); else run2.panelArchivo(K, s.id, cual);
   }
 
   document.addEventListener('click', function (ev) {
