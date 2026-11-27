@@ -30,7 +30,9 @@
   .fila { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #eee; }
   .fila:last-child { border-bottom:0; }
   .chip { flex:none; font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; }
-  .c-Pendiente { background:#fff2cc; color:#7a5b00; } .c-Pagado, .c-Pedido { background:#d9ead3; color:var(--ok); }
+  .c-Pendiente { background:#fff2cc; color:#7a5b00; } .c-Pagado, .c-Recibido { background:#d9ead3; color:var(--ok); } .c-Pedido { background:#cfe2f3; color:#1c4f7a; }
+  .llego { border:0; background:var(--ok); color:#fff; border-radius:10px; padding:9px 12px; font-weight:700; font-size:14px; margin-top:6px; cursor:pointer; }
+  #aviso-corte { display:none; background:#b3261e; color:#fff; padding:14px 16px; font-size:17px; font-weight:700; text-align:center; cursor:pointer; }
   .oculto { display:none; }
   .doble { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
   .calc { background:#faf3e6; border-radius:12px; padding:12px; margin-top:14px; font-size:16px; }
@@ -48,6 +50,7 @@
     <button class="grande" id="b-entrar">Entrar</button><div id="m-login"></div>
   </div>
 </div>
+<div id="aviso-corte">⏰ Ya son las 5: haz el corte de hoy. Toca aquí.</div>
 <div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button><button data-t="corte">🧮 Corte</button><button data-t="rfc">🔎 RFC</button></div>
 <main>
   <section id="t-pagos">
@@ -150,10 +153,14 @@
           (p.pagado ? '<br>Pagado ' + esc(p.pagado) + (p.aviso ? ' · ' + esc(p.aviso) : '') : (p.limite ? '<br>Antes del ' + esc(p.limite) : '')) + '</div></div>' +
           '<span class="chip c-' + esc(p.estado) + '">' + esc(p.estado) + '</span></div>';
       }).join('') : 'Todavía no has pedido pagos.';
+      var EST = { Pendiente: 'Por pedir', Pedido: 'Pedido, en camino', Recibido: 'Recibido ✔' };
       $('l-pedidos').innerHTML = r.pedidos.length ? r.pedidos.slice(0, 60).map(function (p) {
         return '<div class="fila"><div><b>' + esc(p.producto) + '</b> · ' + esc(p.cantidad) + '<div class="meta">' + esc(p.proveedor || 'Sin proveedor') + ' · ' + esc(p.fecha) + (p.por ? ' · ' + esc(p.por) : '') +
-          (p.pedido ? '<br>Pedido el ' + esc(p.pedido) : '') + '</div></div><span class="chip c-' + esc(p.estado) + '">' + esc(p.estado === 'Pedido' ? 'Pedido ✔' : 'Por pedir') + '</span></div>';
+          (p.pedido && p.estado !== 'Pendiente' ? '<br>Pedido el ' + esc(p.pedido) : '') + (p.recibido ? '<br>Llegó el ' + esc(p.recibido) + (p.recibidoPor ? ' · ' + esc(p.recibidoPor) : '') : '') + '</div>' +
+          (p.estado !== 'Recibido' ? '<button class="llego" data-llego="' + esc(p.id) + '">✅ Ya llegó</button>' : '') +
+          '</div><span class="chip c-' + esc(p.estado) + '">' + esc(EST[p.estado] || p.estado) + '</span></div>';
       }).join('') : 'Todavía no hay pedidos.';
+      D.corteHoy = r.corteHoy; revisarHora();
       var cs = r.cortes || { lista: [] }, cl = cs.lista || [];
       if (cs.tasas) TASAS = cs.tasas;
       if (cs.saldo) $('saldo').textContent = '$' + cs.saldo.total.toFixed(2);
@@ -266,6 +273,14 @@
   };
   $('l-cod').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('b-entrar').click(); });
   if (CAJERA) entrado(); else salir();
+  $('l-pedidos').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-llego]'); if (!b) return;
+    llamar('cajaRecibido', [K, [b.dataset.llego], cod()], function () { cargar(); }, function (e) { alert(e); }, b);
+  });
+  function horaMexico() { try { return Number(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: 'numeric', hour12: false })) % 24; } catch (e) { return new Date().getHours(); } }
+  function revisarHora() { $('aviso-corte').style.display = D && !D.corteHoy && horaMexico() >= ((D && D.horaCorte) || 17) ? 'block' : 'none'; }
+  $('aviso-corte').onclick = function () { document.querySelector('.tabs button[data-t=corte]').click(); window.scrollTo(0, 0); };
+  setInterval(revisarHora, 60000);
   cargar();
 </script>
 </body>

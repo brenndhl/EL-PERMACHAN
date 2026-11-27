@@ -337,9 +337,15 @@ function panelComentarioEstado(k, id, estado) {
 
 const COL_PAGOPROV = ['ID', 'Fecha solicitud', 'Proveedor', 'Correo proveedor', 'Concepto', 'Importe', 'Fecha límite', 'Adjunto',
   'Solicitado por', 'Estado', 'Fecha pago', 'Comprobante', 'Correo al proveedor'];
-const COL_PEDIDOS = ['ID', 'Fecha', 'Proveedor', 'Producto', 'Cantidad', 'Notas', 'Solicitado por', 'Estado', 'Fecha pedido'];
+const COL_PEDIDOS = ['ID', 'Fecha', 'Proveedor', 'Producto', 'Cantidad', 'Notas', 'Solicitado por', 'Estado', 'Fecha pedido', 'Fecha recibido', 'Recibido por'];
 function hojaPagoProv_() { return hojaCon_('Pagos proveedores', COL_PAGOPROV); }
-function hojaPedidos_() { return hojaCon_('Pedidos', COL_PEDIDOS); }
+function hojaPedidos_() { return asegurarCols_(hojaCon_('Pedidos', COL_PEDIDOS), COL_PEDIDOS); }
+/** Añade a la cabecera las columnas nuevas que falten (hojas creadas con una versión anterior). */
+function asegurarCols_(sh, cols) {
+  const n = sh.getLastColumn();
+  if (n < cols.length) sh.getRange(1, n + 1, 1, cols.length - n).setValues([cols.slice(n)]).setFontWeight('bold').setBackground('#1f4e5f').setFontColor('#ffffff');
+  return sh;
+}
 
 function claveCaja_() {
   const props = PropertiesService.getScriptProperties();
@@ -372,13 +378,14 @@ function cajaDatos(k) {
     pagado: fmtFecha_(r['Fecha pago'], true), comprobante: !!r['Comprobante'], aviso: r['Correo al proveedor'] }));
   const pedidos = leerTabla_(hojaPedidos_()).filter(r => r['ID']).reverse().slice(0, 300).map(r => ({
     id: r['ID'], por: r['Solicitado por'], fecha: fmtFecha_(r['Fecha'], true), proveedor: r['Proveedor'], producto: r['Producto'], cantidad: r['Cantidad'],
-    notas: r['Notas'], estado: r['Estado'], pedido: fmtFecha_(r['Fecha pedido'], true) }));
+    notas: r['Notas'], estado: r['Estado'], pedido: fmtFecha_(r['Fecha pedido'], true), recibido: fmtFecha_(r['Fecha recibido'], true), recibidoPor: r['Recibido por'] || '' }));
   const proveedores = {};
   leerTabla_(hojaPagoProv_()).forEach(r => { if (r['Proveedor']) proveedores[r['Proveedor']] = r['Correo proveedor'] || proveedores[r['Proveedor']] || ''; });
   leerTabla_(hojaPedidos_()).forEach(r => { if (r['Proveedor'] && proveedores[r['Proveedor']] === undefined) proveedores[r['Proveedor']] = ''; });
   let cortes = { lista: [], mes: null };
   try { cortes = cortesDatos_(); } catch (err) { Logger.log(err); }
-  return { ok: true, duena: esDuena_(k), pagos: pagos, pedidos: pedidos, cortes: cortes, hoy: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
+  const corteHoy = (cortes.lista || []).some(c => c.fecha === ymd_(new Date()));
+  return { ok: true, duena: esDuena_(k), pagos: pagos, pedidos: pedidos, cortes: cortes, corteHoy: corteHoy, horaCorte: HORA_AVISO_CORTE_, hoy: Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd'),
     proveedores: Object.keys(proveedores).sort().map(p => [p, proveedores[p]]) };
 }
 
@@ -396,11 +403,13 @@ function cajaNuevoPago(k, p) {
   try {
     const id = sigId_('SIG_PAGOPROV', 'P-');
     const lim = fechaDe_(p.limite);
+    const yaPagado = p.estado === 'Pagado' && esDuena_(k);
     agregarFila_(hojaPagoProv_(), COL_PAGOPROV, { 'ID': id, 'Fecha solicitud': new Date(), 'Proveedor': prov,
       'Correo proveedor': String(p.correo || '').trim().toLowerCase(), 'Concepto': String(p.concepto || '').trim().slice(0, 300), 'Importe': imp,
       'Fecha límite': lim || '', 'Adjunto': guardarAdjuntoCaja_(p.adjunto, 'pago_' + id), 'Solicitado por': quien,
-      'Estado': 'Pendiente', 'Fecha pago': '', 'Comprobante': '', 'Correo al proveedor': '' });
-    actividad_(quien, 'Pago pedido', id + ' · ' + prov + ' · $' + imp.toFixed(2));
+      'Estado': yaPagado ? 'Pagado' : 'Pendiente', 'Fecha pago': yaPagado ? new Date() : '', 'Comprobante': '', 'Correo al proveedor': '' });
+    actividad_(quien, yaPagado ? 'Pago registrado (ya pagado)' : 'Pago pedido', id + ' · ' + prov + ' · $' + imp.toFixed(2));
+    if (!esCaja_(k) || yaPagado) return { ok: true, id: id };
     enviarCorreo_(CORREO_CONTACTO_APPS_, 'Nuevo pago a proveedor pedido por ' + quien + ': ' + prov + ' — $' + imp.toFixed(2),
       '<p><b>' + esc_(prov) + '</b> · $' + imp.toFixed(2) + (lim ? ' · antes del ' + fmtFecha_(lim) : '') + '</p><p>' + esc_(p.concepto || '') + '</p><p>Ábrelo en la app, en Administración → Proveedores.</p>');
     return { ok: true, id: id };
@@ -408,7 +417,7 @@ function cajaNuevoPago(k, p) {
 }
 
 /** La cajera pide productos. items = [{proveedor, producto, cantidad, notas}] */
-function cajaNuevoPedido(k, items, cajera) {
+function cajaNuevoPedido(k, items, cajera, estado) {
   if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
   const quien = quienCaja_(k, cajera);
   if (!quien) return { ok: false, cajera: false, error: 'Escribe tu código de cajera.' };
@@ -417,9 +426,10 @@ function cajaNuevoPedido(k, items, cajera) {
   const lock = LockService.getScriptLock(); lock.waitLock(30000);
   try {
     const sh = hojaPedidos_(), ahora = new Date();
+    const est = ['Pedido', 'Recibido'].indexOf(estado) >= 0 && esDuena_(k) ? estado : 'Pendiente';
     items.forEach(it => agregarFila_(sh, COL_PEDIDOS, { 'ID': sigId_('SIG_PEDIDO', 'D-'), 'Fecha': ahora, 'Proveedor': String(it.proveedor || '').trim().slice(0, 100),
       'Producto': String(it.producto).trim().slice(0, 150), 'Cantidad': String(it.cantidad || '').trim().slice(0, 40), 'Notas': String(it.notas || '').trim().slice(0, 200),
-      'Solicitado por': quien, 'Estado': 'Pendiente', 'Fecha pedido': '' }));
+      'Solicitado por': quien, 'Estado': est, 'Fecha pedido': est !== 'Pendiente' ? ahora : '', 'Fecha recibido': est === 'Recibido' ? ahora : '', 'Recibido por': est === 'Recibido' ? quien : '' }));
     actividad_(quien, 'Pedido', items.length + ' productos: ' + items.map(it => it.producto).join(', ').slice(0, 200));
     return { ok: true, n: items.length };
   } finally { lock.releaseLock(); }
@@ -459,10 +469,38 @@ function panelPedidosHechos(k, ids) {
   ids = (ids || []).map(String);
   const sh = hojaPedidos_(), v = sh.getDataRange().getValues(), ahora = new Date();
   let n = 0;
-  for (let i = 1; i < v.length; i++) if (ids.indexOf(String(v[i][0])) >= 0 && v[i][7] !== 'Pedido') {
+  for (let i = 1; i < v.length; i++) if (ids.indexOf(String(v[i][0])) >= 0 && v[i][7] === 'Pendiente') {
     actualizarFila_(sh, COL_PEDIDOS, i + 1, { 'Estado': 'Pedido', 'Fecha pedido': ahora }); n++;
   }
   return { ok: true, n: n };
+}
+
+/** La cajera (o la administradora) confirma que el pedido llegó. */
+function cajaRecibido(k, ids, cajera) {
+  if (!esCajaODuena_(k)) return { ok: false, error: 'Este enlace no es válido.' };
+  const quien = quienCaja_(k, cajera);
+  if (!quien) return { ok: false, cajera: false, error: 'Escribe tu código de cajera.' };
+  ids = (ids || []).map(String);
+  const sh = hojaPedidos_(), v = sh.getDataRange().getValues(), ahora = new Date();
+  const nombres = [];
+  for (let i = 1; i < v.length; i++) if (ids.indexOf(String(v[i][0])) >= 0 && v[i][7] !== 'Recibido') {
+    const c = { 'Estado': 'Recibido', 'Fecha recibido': ahora, 'Recibido por': quien };
+    if (!v[i][8]) c['Fecha pedido'] = ahora;
+    actualizarFila_(sh, COL_PEDIDOS, i + 1, c); nombres.push(v[i][3]);
+  }
+  if (nombres.length) actividad_(quien, 'Pedido recibido', nombres.join(', ').slice(0, 250));
+  return { ok: true, n: nombres.length };
+}
+
+/** La administradora marca un pago como pagado sin comprobante ni correo (p. ej. pagos antiguos). */
+function panelPagoEstado(k, id, estado) {
+  if (!esDuena_(k)) return { ok: false, error: 'Solo la administradora.' };
+  const sh = hojaPagoProv_(), v = sh.getDataRange().getValues();
+  for (let i = 1; i < v.length; i++) if (String(v[i][0]) === String(id)) {
+    actualizarFila_(sh, COL_PAGOPROV, i + 1, estado === 'Pendiente' ? { 'Estado': 'Pendiente', 'Fecha pago': '' } : { 'Estado': 'Pagado', 'Fecha pago': new Date() });
+    return { ok: true };
+  }
+  return { ok: false, error: 'No encuentro el pago.' };
 }
 
 /** Ver adjunto o comprobante de un pago. */
@@ -668,6 +706,42 @@ function cajaCorteFoto(k, fecha) {
   return { ok: true, tipo: b.getContentType(), nombre: b.getName(), base64: Utilities.base64Encode(b.getBytes()) };
 }
 
+const HORA_AVISO_CORTE_ = 17;   // 5 de la tarde (hora de México): recordatorio del corte (se cierra a las 5:30)
+
+/** La administradora escribe cuánto hay HOY en la cuenta de la tarjeta; desde ahí se va sumando cada corte. */
+function panelSaldoTarjeta(k, saldoHoy) {
+  if (!esDuena_(k)) return { ok: false, error: 'Solo la administradora.' };
+  const s = num_(saldoHoy);
+  if (String(saldoHoy).trim() === '') return { ok: false, error: 'Escribe el saldo.' };
+  const netos = leerTabla_(hojaCortes_()).reduce((a, r) => a + num_(r['Neto tarjeta']), 0);
+  setConfig_('SALDO_TARJETA_INICIAL', r2_(s - netos));
+  return { ok: true, saldo: saldoTarjeta_().total };
+}
+
+/** Comisiones de vuestro contrato Getnet (en %). */
+function panelTasas(k, debito, credito) {
+  if (!esDuena_(k)) return { ok: false, error: 'Solo la administradora.' };
+  const d = num_(debito), c = num_(credito);
+  if (!(d > 0 && d < 10 && c > 0 && c < 10)) return { ok: false, error: 'Escribe los porcentajes, por ejemplo 1.65 y 2.20.' };
+  setConfig_('COMISION_DEBITO', d); setConfig_('COMISION_CREDITO', c);
+  return { ok: true, tasas: tasasGetnet_() };
+}
+
+/** 17:00 (México): si todavía no hay corte de hoy, avisa a las cajeras por correo. En la app también sale el aviso. */
+function recordatorioCorte() {
+  const hoy = ymd_(new Date());
+  if (leerTabla_(hojaCortes_()).some(r => r['Fecha'] instanceof Date && ymd_(r['Fecha']) === hoy)) return 'Ya hay corte';
+  const correos = leerTabla_(hojaCajeras_()).filter(r => r['Activa'] !== 'No' && emailValido_(r['Correo'])).map(r => r['Correo']);
+  if (!correos.length) return 'Sin correos de cajeras';
+  const app = String(cfg_().URL_APP || 'https://brenndhl.github.io/EL-PERMACHAN/');
+  enviarCorreo_(correos.join(','), '⏰ Hora del corte de caja — ' + cfg_().NOMBRE_NEGOCIO,
+    '<p style="font-size:18px">Hola, ya casi cerramos. Antes de irte haz el <b>corte del día</b>:</p>' +
+    '<ol style="font-size:17px"><li>Saca el cierre de la terminal Getnet.</li><li>Abre la app → <b>Caja</b> → <b>🧮 Corte</b>.</li>' +
+    '<li>Escribe lo de <b>débito</b> y lo de <b>crédito</b> y pulsa <b>Guardar corte</b>.</li></ol>' +
+    '<p style="text-align:center;margin:22px 0"><a href="' + esc_(app) + '" style="background:#141110;color:#f3ead6;text-decoration:none;font-weight:bold;font-size:18px;padding:14px 26px;border-radius:10px">Abrir la app</a></p>');
+  return 'Aviso enviado';
+}
+
 /* ============================ CAJA: CONSULTAR RFC ============================ */
 
 /** La cajera consulta si un RFC es de persona física o moral y si ya es cliente. */
@@ -685,6 +759,15 @@ function cajaConsultarRFC(k, texto) {
       constancia: !!d['Constancia'], csfVencida: csfVencida_(d) } : null };
 }
 
+/** Manda a elpermachan@gmail.com el enlace de la app con TU acceso de administradora (para tu móvil). */
+function enviarEnlaceDuena() {
+  const u = String(cfg_().URL_APP || 'https://brenndhl.github.io/EL-PERMACHAN/') + '#k=' + claveDuena_();
+  enviarCorreo_(CORREO_CONTACTO_APPS_, 'Tu acceso de administradora a la app — ' + cfg_().NOMBRE_NEGOCIO,
+    '<p>Abre este enlace <b>una vez en tu móvil</b> (no lo reenvíes a nadie). En Administración verás también <b>Pagos, pedidos y cortes</b>:</p>' +
+    '<p style="font-size:16px"><a href="' + esc_(u) + '">' + esc_(u) + '</a></p>');
+  return 'Enviado a ' + CORREO_CONTACTO_APPS_;
+}
+
 /** Manda a elpermachan@gmail.com el enlace de la app de la cajera (para reenviárselo por WhatsApp). */
 function enviarEnlaceCaja() {
   const u = enlaceAppCaja();
@@ -700,9 +783,9 @@ function enviarEnlaceCaja() {
 // Cada cajera tiene su código de 4 cifras. Lo escribe una vez en su móvil y así queda registrado
 // quién pide cada pago, cada pedido y cada corte. La administradora las da de alta en el panel.
 
-const COL_CAJERAS = ['Código', 'Nombre', 'Activa', 'Alta', 'Último uso'];
+const COL_CAJERAS = ['Código', 'Nombre', 'Activa', 'Alta', 'Último uso', 'Correo'];
 const COL_ACTIV = ['Fecha', 'Cajera', 'Acción', 'Detalle'];
-function hojaCajeras_() { return hojaCon_('Cajeras', COL_CAJERAS); }
+function hojaCajeras_() { return asegurarCols_(hojaCon_('Cajeras', COL_CAJERAS), COL_CAJERAS); }
 function hojaActiv_() { return hojaCon_('Actividad caja', COL_ACTIV); }
 
 function cajeraPorCodigo_(codigo) {
@@ -744,8 +827,8 @@ function panelCajeras(k) {
   const cajeras = leerTabla_(hojaCajeras_()).filter(r => r['Nombre']).map(r => {
     const suyas = act.filter(a => a['Cajera'] === r['Nombre'] && a['Fecha'].getTime() > hace30);
     const cuenta = t => suyas.filter(a => String(a['Acción']).indexOf(t) === 0).length;
-    return { codigo: String(r['Código']), nombre: r['Nombre'], activa: r['Activa'] !== 'No', alta: fmtFecha_(r['Alta']), ultimo: fmtFecha_(r['Último uso'], true),
-      pagos: cuenta('Pago'), pedidos: cuenta('Pedido'), cortes: cuenta('Corte'), entradas: cuenta('Entró') };
+    return { codigo: String(r['Código']), nombre: r['Nombre'], correo: r['Correo'] || '', activa: r['Activa'] !== 'No', alta: fmtFecha_(r['Alta']), ultimo: fmtFecha_(r['Último uso'], true),
+      pagos: cuenta('Pago'), pedidos: cuenta('Pedido') - cuenta('Pedido recibido'), recibidos: cuenta('Pedido recibido'), cortes: cuenta('Corte'), entradas: cuenta('Entró') };
   });
   return { ok: true, cajeras: cajeras, actividad: act.slice(-80).reverse().map(a => ({ fecha: fmtFecha_(a['Fecha'], true), cajera: a['Cajera'], accion: a['Acción'], detalle: a['Detalle'] })) };
 }
@@ -756,10 +839,13 @@ function panelCajeraGuardar(k, c) {
   c = c || {};
   const nombre = String(c.nombre || '').trim().slice(0, 60);
   if (nombre.length < 2) return { ok: false, error: 'Escribe el nombre de la cajera.' };
+  const correo = String(c.correo || '').trim().toLowerCase();
+  if (correo && !emailValido_(correo)) return { ok: false, error: 'El correo no es válido.' };
   const sh = hojaCajeras_(), v = sh.getDataRange().getValues();
   if (c.codigo) {
     for (let i = 1; i < v.length; i++) if (String(v[i][0]) === String(c.codigo)) {
       sh.getRange(i + 1, 2, 1, 2).setValues([[nombre, c.activa === false ? 'No' : 'Sí']]);
+      if (c.correo !== undefined) sh.getRange(i + 1, 6).setValue(correo);
       return { ok: true, codigo: String(c.codigo), mensaje: 'Guardado.' };
     }
     return { ok: false, error: 'No encuentro esa cajera.' };
@@ -767,7 +853,7 @@ function panelCajeraGuardar(k, c) {
   const usados = v.slice(1).map(r => String(r[0]));
   let codigo;
   do { codigo = String(Math.floor(1000 + Math.random() * 9000)); } while (usados.indexOf(codigo) >= 0);
-  sh.getRange(sh.getLastRow() + 1, 1, 1, 5).setValues([["'" + codigo, nombre, 'Sí', new Date(), '']]);
+  sh.getRange(sh.getLastRow() + 1, 1, 1, 6).setValues([["'" + codigo, nombre, 'Sí', new Date(), '', correo]]);
   return { ok: true, codigo: codigo, mensaje: nombre + ' dada de alta. Su código es ' + codigo + '.' };
 }
 
@@ -777,9 +863,10 @@ function instalarExtras() {
   hojaComent_(); hojaPagoProv_(); hojaPedidos_(); hojaCompl_(); hojaCortes_(); hojaCajeras_(); hojaActiv_();
   const pr = PropertiesService.getScriptProperties(); if (!pr.getProperty('COMPL_DESDE')) pr.setProperty('COMPL_DESDE', String(Date.now()));
   ['Correos extra', 'Correos quitados', 'Fecha constancia', 'Aviso CSF'].forEach(colCliente_);
-  ScriptApp.getProjectTriggers().forEach(t => { if (['resumenCaja', 'recordatorioCSF', 'recordarComplementos'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
+  ScriptApp.getProjectTriggers().forEach(t => { if (['resumenCaja', 'recordatorioCSF', 'recordarComplementos', 'recordatorioCorte'].indexOf(t.getHandlerFunction()) >= 0) ScriptApp.deleteTrigger(t); });
   ScriptApp.newTrigger('resumenCaja').timeBased().everyDays(1).atHour(9).create();
   ScriptApp.newTrigger('recordatorioCSF').timeBased().onMonthDay(5).atHour(11).create();
+  ScriptApp.newTrigger('recordatorioCorte').timeBased().everyDays(1).atHour(HORA_AVISO_CORTE_).nearMinute(0).inTimezone('America/Mexico_City').create();
   ScriptApp.newTrigger('recordarComplementos').timeBased().onWeekDay(ScriptApp.WeekDay.MONDAY).atHour(10).create();
   const txt = 'Extras instalados. Enlace de la cajera: ' + enlaceAppCaja();
   Logger.log(txt);

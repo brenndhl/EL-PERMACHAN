@@ -461,13 +461,19 @@
       $('prov-lista').innerHTML = '<div class="kpis">' + kpi($f(cs.saldo ? cs.saldo.total : 0), '💳 Dinero de tarjeta acumulado', false) + kpi($f(mm.tarjeta), 'Tarjeta este mes (' + mm.dias + ' días)', false) +
         kpi($f(mm.comision), 'Comisión Getnet este mes', false) + kpi($f(mm.neto), 'Llega a la cuenta este mes', false) +
         (mm.ventas ? kpi((mm.diferencia > 0 ? '+' : '') + $f(mm.diferencia), 'Diferencias de efectivo', Math.abs(mm.diferencia) >= 0.5) : '') + '</div>' +
-        '<div class="meta" style="margin-bottom:8px">Comisión usada: débito ' + ts.debito + ' %, crédito ' + ts.credito + ' % + IVA ' + ts.iva + ' %. Cámbiala en la hoja <i>Config</i> (COMISION_DEBITO, COMISION_CREDITO) con las tasas de vuestro contrato Getnet.</div>' +
+        '<div class="card form"><b>💳 ¿Cuánto hay hoy en la cuenta de la tarjeta?</b><div class="meta">Escríbelo una vez (lo ves en Santander). Desde ahí se va sumando lo que llega de cada corte.</div>' +
+        '<div class="dos" style="grid-template-columns:2fr 1fr"><input id="sd-v" inputmode="decimal" placeholder="Saldo de hoy, ej. 25000"><button class="x-ok" id="sd-ok" style="border:0;border-radius:9px;font-weight:700">Guardar saldo</button></div><div id="sd-r"></div></div>' +
+        '<div class="card form"><b>Comisión de Getnet (vuestro contrato)</b><div class="meta">Ahora: débito ' + ts.debito + ' %, crédito ' + ts.credito + ' %, + IVA ' + ts.iva + ' % sobre la comisión. Mira las tasas en tu contrato o estado de cuenta Getnet.</div>' +
+        '<div class="dos"><div><label>Débito %</label><input id="tx-d" inputmode="decimal" value="' + ts.debito + '"></div><div><label>Crédito %</label><input id="tx-c" inputmode="decimal" value="' + ts.credito + '"></div></div>' +
+        '<div class="acc"><button class="x-em" id="tx-ok">Guardar comisión</button></div><div id="tx-r"></div></div>' +
         (cs.lista.length ? '<div class="card" style="overflow-x:auto"><table class="ped"><tr><th>Día</th><th>Débito</th><th>Crédito</th><th>Comisión</th><th>Llega</th><th>Efectivo</th></tr>' +
           cs.lista.map(function (c) {
             var efe = c.contado === null ? '—' : (Math.abs(c.diferencia) < 0.5 ? '<span style="color:var(--ok)">✔ cuadra</span>' : '<b style="color:var(--no)">' + (c.diferencia > 0 ? '+' : '') + $f(c.diferencia) + '</b>');
             return '<tr><td><b>' + fb(c.fecha) + '</b>' + (c.foto ? ' <a href="#" data-cfoto="' + c.fecha + '">📷</a>' : '') + (c.notas || c.detalle ? '<div class="meta">' + esc([c.detalle, c.notas].filter(String).join(' · ')) + '</div>' : '') +
               '</td><td>' + $f(c.debito) + '</td><td>' + $f(c.credito) + '</td><td>' + $f(c.comision) + '</td><td><b>' + $f(c.neto) + '</b></td><td>' + efe + '</td></tr>';
           }).join('') + '</table></div><div id="cfoto-v"></div>' : '<div class="card vacio">Todavía no hay cortes. Los llena la cajera al cerrar (Caja → 🧮 Corte), o tú con «＋ Corte».</div>');
+      $('sd-ok').onclick = function () { run('panelSaldoTarjeta', [K, $('sd-v').value], function (r) { $('sd-r').innerHTML = '<div class="aviso ok">Guardado. Dinero de tarjeta: $' + r.saldo.toFixed(2) + '</div>'; setTimeout(cargarProv, 1200); }, $('sd-r')); };
+      $('tx-ok').onclick = function () { run('panelTasas', [K, $('tx-d').value, $('tx-c').value], function () { $('tx-r').innerHTML = '<div class="aviso ok">Comisión guardada. Se aplica a los cortes nuevos.</div>'; setTimeout(cargarProv, 1200); }, $('tx-r')); };
       return;
     }
     if (PV === 'pagos') {
@@ -485,7 +491,7 @@
             (p.estado !== 'Pagado' && DUENA ? '<button class="x-ok" data-pagar="' + i + '">💸 He pagado</button>' : '') + '</div><div id="pp' + i + '"></div></div>';
         }).join('') || '<div class="card vacio">No hay pagos pedidos.</div>');
     } else {
-      var pe = CAJA.pedidos.filter(function (p) { return p.estado !== 'Pedido'; }), he = CAJA.pedidos.filter(function (p) { return p.estado === 'Pedido'; }).slice(0, 40);
+      var pe = CAJA.pedidos.filter(function (p) { return p.estado === 'Pendiente'; }), camino = CAJA.pedidos.filter(function (p) { return p.estado === 'Pedido'; }), he = CAJA.pedidos.filter(function (p) { return p.estado === 'Recibido'; }).slice(0, 40);
       var grupos = {};
       pe.forEach(function (p) { var k = p.proveedor || 'Sin proveedor'; (grupos[k] = grupos[k] || []).push(p); });
       $('prov-lista').innerHTML = '<div class="meta" style="margin-bottom:8px"><b>' + pe.length + ' productos por pedir</b>. Los lunes te llega la lista de la semana.</div>' +
@@ -496,8 +502,10 @@
           }).join('') + '</table></div>';
         }).join('') + (pe.length && DUENA ? '<button class="x-ok" id="b-pedidos" style="width:100%;padding:14px;border:0;border-radius:10px;font-weight:700">✅ Marcar seleccionados como pedidos</button><div id="r-ped"></div>' : '') +
         (pe.length ? '' : '<div class="card vacio">No hay nada por pedir. 🎉</div>') +
-        (he.length ? '<div class="card"><div class="nom">Ya pedidos (recientes)</div><table class="ped">' + he.map(function (p) {
-          return '<tr><td>' + esc(p.producto) + '</td><td>' + esc(p.cantidad) + '</td><td class="meta">' + esc(p.proveedor) + '</td><td class="meta">' + esc(p.pedido) + '</td></tr>'; }).join('') + '</table></div>' : '');
+        (camino.length ? '<div class="card"><div class="nom">🚚 Pedidos, en camino (' + camino.length + ')</div><table class="ped">' + camino.map(function (p) {
+          return '<tr><td><b>' + esc(p.producto) + '</b><div class="meta">' + esc(p.proveedor || '') + ' · pedido ' + esc(p.pedido) + '</div></td><td>' + esc(p.cantidad) + '</td><td><button class="x-ok" data-llego="' + esc(p.id) + '" style="border:0;border-radius:8px;padding:7px 10px;font-weight:700">✅ Llegó</button></td></tr>'; }).join('') + '</table><div class="meta">La cajera también puede marcar «Ya llegó» desde su móvil.</div></div>' : '') +
+        (he.length ? '<div class="card"><div class="nom">✔ Recibidos (recientes)</div><table class="ped">' + he.map(function (p) {
+          return '<tr><td>' + esc(p.producto) + '</td><td>' + esc(p.cantidad) + '</td><td class="meta">' + esc(p.proveedor) + '</td><td class="meta">llegó ' + esc(p.recibido) + (p.recibidoPor ? '<br>' + esc(p.recibidoPor) : '') + '</td></tr>'; }).join('') + '</table></div>' : '');
       if ($('b-pedidos')) $('b-pedidos').onclick = function () {
         var ids = Array.prototype.map.call(document.querySelectorAll('.ck-ped:checked'), function (c) { return c.value; });
         if (!ids.length) { $('r-ped').innerHTML = '<div class="aviso no">Marca al menos un producto.</div>'; return; }
@@ -507,6 +515,8 @@
     }
   }
   $('prov-lista').addEventListener('click', function (ev) {
+    var ll = ev.target.closest('[data-llego]');
+    if (ll) { ll.disabled = true; run('cajaRecibido', [K, [ll.dataset.llego], ''], function () { cargarProv(); }, null); return; }
     var cf = ev.target.closest('[data-cfoto]');
     if (cf) { ev.preventDefault(); run('cajaCorteFoto', [K, cf.dataset.cfoto], function (r) { abrirArchivo(r, $('cfoto-v')); }, $('cfoto-v')); return; }
     var a = ev.target.closest('button[data-arch]');
@@ -531,20 +541,23 @@
   function pintarCajeras() {
     $('prov-lista').innerHTML = '<div class="card">Cargando…</div>';
     run('panelCajeras', [K], function (r) {
-      $('prov-lista').innerHTML = '<div class="card form"><b>Nueva cajera</b><div class="dos" style="grid-template-columns:2fr 1fr"><input id="cj-nom" placeholder="Nombre">' +
+      $('prov-lista').innerHTML = '<div class="card form"><b>Nueva cajera</b><div class="dos" style="grid-template-columns:2fr 2fr 1fr"><input id="cj-nom" placeholder="Nombre"><input id="cj-mail" type="email" placeholder="Correo (aviso de las 5)">' +
         '<button class="x-ok" id="cj-add" style="border:0;border-radius:9px;font-weight:700">＋ Dar de alta</button></div><div class="meta" style="margin-top:6px">Se le crea un código de 4 cifras. Ella lo escribe una vez en su móvil (en la app de caja).</div><div id="cj-r"></div></div>' +
         (r.cajeras.length ? r.cajeras.map(function (c) {
           return '<div class="card"><div class="top"><div><div class="nom">👩 ' + esc(c.nombre) + ' · código <span style="letter-spacing:2px">' + esc(c.codigo) + '</span></div>' +
-            '<div class="meta">Últimos 30 días: ' + c.pagos + ' pagos pedidos · ' + c.pedidos + ' pedidos · ' + c.cortes + ' cortes · ' + c.entradas + ' entradas<br>Último uso: ' + esc(c.ultimo || 'nunca') + ' · alta ' + esc(c.alta) + '</div></div>' +
+            '<div class="meta">' + (c.correo ? '✉️ ' + esc(c.correo) + '<br>' : '✉️ sin correo (no le llega el aviso de las 5)<br>') + 'Últimos 30 días: ' + c.pagos + ' pagos pedidos · ' + c.pedidos + ' pedidos · ' + c.recibidos + ' recibidos · ' + c.cortes + ' cortes · ' + c.entradas + ' entradas<br>Último uso: ' + esc(c.ultimo || 'nunca') + ' · alta ' + esc(c.alta) + '</div></div>' +
             '<span class="badge ' + (c.activa ? 'b-Enviada">Activa' : 'b-Rechazada">Sin acceso') + '</span></div>' +
-            '<div class="acc"><button class="' + (c.activa ? 'x-no' : 'x-ok') + '" data-cj="' + esc(c.codigo) + '" data-nom="' + esc(c.nombre) + '" data-act="' + (c.activa ? '0' : '1') + '">' + (c.activa ? 'Quitar acceso' : 'Devolver acceso') + '</button></div></div>';
+            '<div class="acc"><button class="x-re" data-cjmail="' + esc(c.codigo) + '" data-nom="' + esc(c.nombre) + '" data-mail="' + esc(c.correo) + '">✉️ Correo</button><button class="' + (c.activa ? 'x-no' : 'x-ok') + '" data-cj="' + esc(c.codigo) + '" data-nom="' + esc(c.nombre) + '" data-act="' + (c.activa ? '0' : '1') + '">' + (c.activa ? 'Quitar acceso' : 'Devolver acceso') + '</button></div></div>';
         }).join('') : '<div class="card vacio">Todavía no hay cajeras. Da de alta la primera arriba.</div>') +
         '<div class="card"><div class="nom">Actividad reciente</div>' + (r.actividad.length ? '<table class="ped">' + r.actividad.map(function (a) {
           return '<tr><td class="meta" style="white-space:nowrap">' + esc(a.fecha) + '</td><td><b>' + esc(a.cajera) + '</b></td><td>' + esc(a.accion) + '<div class="meta">' + esc(a.detalle) + '</div></td></tr>'; }).join('') + '</table>' : '<div class="meta">Sin actividad todavía.</div>') + '</div>';
-      $('cj-add').onclick = function () { run('panelCajeraGuardar', [K, { nombre: $('cj-nom').value }], function (x) { alert(x.mensaje); pintarCajeras(); }, $('cj-r')); };
+      $('cj-add').onclick = function () { run('panelCajeraGuardar', [K, { nombre: $('cj-nom').value, correo: $('cj-mail').value }], function (x) { alert(x.mensaje); pintarCajeras(); }, $('cj-r')); };
     }, $('prov-lista'));
   }
   $('prov-lista').addEventListener('click', function (ev) {
+    var m = ev.target.closest('button[data-cjmail]');
+    if (m) { var mail = prompt('Correo de ' + m.dataset.nom + ' (le llega el aviso del corte a las 5):', m.dataset.mail || ''); if (mail === null) return;
+      run('panelCajeraGuardar', [K, { codigo: m.dataset.cjmail, nombre: m.dataset.nom, correo: mail }], function () { pintarCajeras(); }, null); return; }
     var b = ev.target.closest('button[data-cj]'); if (!b) return;
     if (b.dataset.act === '0' && !confirm('¿Quitar el acceso a ' + b.dataset.nom + '? Su código dejará de funcionar.')) return;
     run('panelCajeraGuardar', [K, { codigo: b.dataset.cj, nombre: b.dataset.nom, activa: b.dataset.act === '1' }], function () { pintarCajeras(); }, null);
@@ -553,13 +566,13 @@
   $('nv-pago').onclick = function () {
     $('nv-form').innerHTML = '<div class="card form"><b>Nuevo pago a proveedor</b><label>Proveedor</label><input id="np-prov" list="dl-np"><datalist id="dl-np">' + provs() + '</datalist>' +
       '<label>Correo del proveedor</label><input id="np-correo" type="email"><div class="dos"><div><label>Importe ($)</label><input id="np-imp" inputmode="decimal"></div>' +
-      '<div><label>Pagar antes del</label><input id="np-lim" type="date"></div></div><label>Concepto</label><input id="np-con"><label>Factura o nota (opcional)</label><input id="np-adj" type="file" accept="image/*,application/pdf">' +
+      '<div><label>Pagar antes del</label><input id="np-lim" type="date"></div></div><label>Concepto</label><input id="np-con"><label>Estado</label><select id="np-est"><option value="Pendiente">Pendiente de pagar</option><option value="Pagado">Ya está pagado</option></select><label>Factura o nota (opcional)</label><input id="np-adj" type="file" accept="image/*,application/pdf">' +
       '<div class="acc"><button class="x-ok" id="np-ok">Guardar pago</button><button class="x-re" onclick="document.getElementById(\'nv-form\').innerHTML=\'\'">Cancelar</button></div><div id="np-r"></div></div>';
     $('np-prov').onchange = function () { var x = (CAJA.proveedores || []).filter(function (p) { return p[0] === $('np-prov').value; })[0]; if (x && x[1] && !$('np-correo').value) $('np-correo').value = x[1]; };
     $('np-ok').onclick = function () {
       var b = this; b.disabled = true;
       leerArchivo($('np-adj'), function (adj) {
-        run('cajaNuevoPago', [K, { proveedor: $('np-prov').value, correo: $('np-correo').value, importe: $('np-imp').value, limite: $('np-lim').value, concepto: $('np-con').value, adjunto: adj }],
+        run('cajaNuevoPago', [K, { proveedor: $('np-prov').value, correo: $('np-correo').value, importe: $('np-imp').value, limite: $('np-lim').value, concepto: $('np-con').value, adjunto: adj, estado: $('np-est').value }],
           function (r) { $('nv-form').innerHTML = '<div class="aviso ok">Pago ' + esc(r.id) + ' guardado.</div>'; PV = 'pagos'; cargarProv(); }, $('np-r'));
         setTimeout(function () { b.disabled = false; }, 1500);
       });
@@ -569,12 +582,12 @@
     var fila = function () { return '<div class="dos" style="grid-template-columns:2fr 1fr;margin-top:6px"><input class="it-p" placeholder="Producto"><input class="it-c" placeholder="Cantidad"></div>'; };
     $('nv-form').innerHTML = '<div class="card form"><b>Nuevo pedido</b><label>Proveedor (opcional)</label><input id="nd-prov" list="dl-nd"><datalist id="dl-nd">' + provs() + '</datalist>' +
       '<label>Productos</label><div id="nd-items">' + fila() + fila() + fila() + '</div><button class="x-re" id="nd-mas" style="margin-top:6px">＋ Otro producto</button>' +
-      '<label>Notas (opcional)</label><input id="nd-notas"><div class="acc"><button class="x-ok" id="nd-ok">Guardar pedido</button><button class="x-re" onclick="document.getElementById(\'nv-form\').innerHTML=\'\'">Cancelar</button></div><div id="nd-r"></div></div>';
+      '<label>Notas (opcional)</label><input id="nd-notas"><label>Estado</label><select id="nd-est"><option value="Pendiente">Por pedir</option><option value="Pedido">Ya lo pedí (en camino)</option><option value="Recibido">Ya llegó</option></select><div class="acc"><button class="x-ok" id="nd-ok">Guardar pedido</button><button class="x-re" onclick="document.getElementById(\'nv-form\').innerHTML=\'\'">Cancelar</button></div><div id="nd-r"></div></div>';
     $('nd-mas').onclick = function () { $('nd-items').insertAdjacentHTML('beforeend', fila()); };
     $('nd-ok').onclick = function () {
       var items = Array.prototype.map.call($('nd-items').children, function (d) { return { proveedor: $('nd-prov').value, producto: d.querySelector('.it-p').value, cantidad: d.querySelector('.it-c').value, notas: $('nd-notas').value }; })
         .filter(function (x) { return x.producto.trim(); });
-      run('cajaNuevoPedido', [K, items], function (r) { $('nv-form').innerHTML = '<div class="aviso ok">' + r.n + ' productos añadidos al pedido.</div>'; PV = 'pedidos'; cargarProv(); }, $('nd-r'));
+      run('cajaNuevoPedido', [K, items, '', $('nd-est').value], function (r) { $('nv-form').innerHTML = '<div class="aviso ok">' + r.n + ' productos añadidos al pedido.</div>'; PV = 'pedidos'; cargarProv(); }, $('nd-r'));
     };
   };
   $('nv-corte').onclick = function () {
