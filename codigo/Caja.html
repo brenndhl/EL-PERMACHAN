@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --negro:#141110; --crema:#f3ead6; --madera:#a8774a; --ok:#1e6b3a; --err:#b3261e; --gris:#6b625a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#f5f1ea; color:#1d1a17; font-size:17px; }
+  header { background:var(--negro); color:var(--crema); padding:14px 16px; display:flex; align-items:center; gap:12px; border-bottom:3px solid var(--madera); }
+  header img { width:46px; height:46px; border-radius:50%; box-shadow:0 0 0 2px var(--madera); }
+  header b { font-size:20px; }
+  .tabs { display:flex; background:#2a2421; }
+  .tabs button { flex:1; border:0; background:none; color:#cbbfa8; font-size:17px; font-weight:700; padding:14px; cursor:pointer; }
+  .tabs button.on { background:var(--madera); color:#fff; }
+  main { max-width:560px; margin:0 auto; padding:14px; }
+  .card { background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  h2 { font-size:19px; margin:0 0 6px; }
+  label { display:block; font-weight:700; font-size:14px; margin:12px 0 4px; }
+  input, select, textarea { width:100%; padding:13px; font-size:17px; border:1px solid #cfc6b8; border-radius:10px; background:#fff; font-family:inherit; }
+  button.grande { width:100%; padding:15px; font-size:17px; font-weight:700; border:0; border-radius:12px; background:var(--negro); color:var(--crema); margin-top:14px; cursor:pointer; }
+  button.sec { background:#efe6d6; color:#7a5232; }
+  button:disabled { opacity:.6; }
+  .msg { padding:12px; border-radius:10px; margin-top:12px; font-size:15px; } .msg.err { background:#fde8e7; color:var(--err); } .msg.ok { background:#e5f4ea; color:var(--ok); }
+  .nota, .meta { font-size:14px; color:var(--gris); }
+  .item { display:grid; grid-template-columns:1fr 90px 36px; gap:6px; margin-top:8px; }
+  .item input { padding:11px; font-size:16px; }
+  .quitar { border:0; background:#f4cccc; color:var(--err); border-radius:10px; font-size:18px; cursor:pointer; }
+  .fila { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; padding:10px 0; border-bottom:1px solid #eee; }
+  .fila:last-child { border-bottom:0; }
+  .chip { flex:none; font-size:12px; font-weight:700; padding:4px 10px; border-radius:999px; }
+  .c-Pendiente { background:#fff2cc; color:#7a5b00; } .c-Pagado, .c-Pedido { background:#d9ead3; color:var(--ok); }
+  .oculto { display:none; }
+  .doble { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+</style>
+</head>
+<body>
+<header><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt=""><div><b>Caja</b><div class="nota" style="color:#cbbfa8">Pagos a proveedores y pedidos</div></div></header>
+<div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button></div>
+<main>
+  <section id="t-pagos">
+    <div class="card">
+      <h2>Pedir un pago a proveedor</h2>
+      <p class="nota">Brenda lo paga y el comprobante le llega solo al proveedor por correo.</p>
+      <label>Proveedor</label><input id="p-prov" list="dl-prov" placeholder="Ej. Abarrotes López"><datalist id="dl-prov"></datalist>
+      <label>Correo del proveedor (para mandarle el comprobante)</label><input id="p-correo" type="email" placeholder="proveedor@correo.com">
+      <div class="doble"><div><label>Importe ($)</label><input id="p-imp" inputmode="decimal" placeholder="0.00"></div>
+        <div><label>Pagar antes del</label><input id="p-lim" type="date"></div></div>
+      <label>Concepto</label><input id="p-con" placeholder="Ej. factura A-123, verdura de la semana">
+      <label>Factura o nota del proveedor (opcional)</label><input id="p-adj" type="file" accept="image/*,application/pdf">
+      <button class="grande" id="b-pago">Enviar a Brenda</button>
+      <div id="m-pago"></div>
+    </div>
+    <div class="card"><h2>Pagos pedidos</h2><div id="l-pagos" class="nota">Cargando…</div></div>
+  </section>
+
+  <section id="t-pedidos" class="oculto">
+    <div class="card">
+      <h2>Lista de pedido</h2>
+      <p class="nota">Escribe lo que hace falta. Brenda revisa los pedidos cada semana.</p>
+      <label>Proveedor (si lo sabes)</label><input id="d-prov" list="dl-prov" placeholder="Opcional">
+      <div class="item nota" style="margin-top:12px"><span>Producto</span><span>Cantidad</span><span></span></div>
+      <div id="items"></div>
+      <button class="grande sec" id="b-mas">＋ Añadir otro producto</button>
+      <label>Notas (opcional)</label><input id="d-notas" placeholder="Ej. que sea de la marca de siempre">
+      <button class="grande" id="b-pedido">Enviar pedido</button>
+      <div id="m-pedido"></div>
+    </div>
+    <div class="card"><h2>Pedidos</h2><div id="l-pedidos" class="nota">Cargando…</div></div>
+  </section>
+</main>
+<script>
+  var K = <?= clave ?>, D = null;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function msg(id, t, tipo) { $(id).innerHTML = t ? '<div class="msg ' + (tipo || 'err') + '">' + esc(t) + '</div>' : ''; }
+  function llamar(fn, args, ok, fail, btn) {
+    var t = btn && btn.textContent; if (btn) { btn.disabled = true; btn.textContent = 'Enviando…'; }
+    var r = google.script.run.withSuccessHandler(function (res) { if (btn) { btn.disabled = false; btn.textContent = t; } if (res && res.ok === false) fail(res.error); else ok(res); })
+      .withFailureHandler(function (e) { if (btn) { btn.disabled = false; btn.textContent = t; } fail(e && e.message || 'Sin conexión. Inténtalo de nuevo.'); });
+    r[fn].apply(r, args);
+  }
+  document.querySelector('.tabs').onclick = function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle('on', x === b); });
+    $('t-pagos').classList.toggle('oculto', b.dataset.t !== 'pagos'); $('t-pedidos').classList.toggle('oculto', b.dataset.t !== 'pedidos');
+  };
+
+  function cargar() {
+    llamar('cajaDatos', [K], function (r) {
+      D = r;
+      $('dl-prov').innerHTML = r.proveedores.map(function (p) { return '<option value="' + esc(p[0]) + '">'; }).join('');
+      $('l-pagos').innerHTML = r.pagos.length ? r.pagos.slice(0, 30).map(function (p) {
+        return '<div class="fila"><div><b>' + esc(p.proveedor) + '</b> · $' + p.importe.toFixed(2) + '<div class="meta">' + esc(p.fecha) + (p.concepto ? ' · ' + esc(p.concepto) : '') +
+          (p.pagado ? '<br>Pagado ' + esc(p.pagado) + (p.aviso ? ' · ' + esc(p.aviso) : '') : (p.limite ? '<br>Antes del ' + esc(p.limite) : '')) + '</div></div>' +
+          '<span class="chip c-' + esc(p.estado) + '">' + esc(p.estado) + '</span></div>';
+      }).join('') : 'Todavía no has pedido pagos.';
+      $('l-pedidos').innerHTML = r.pedidos.length ? r.pedidos.slice(0, 60).map(function (p) {
+        return '<div class="fila"><div><b>' + esc(p.producto) + '</b> · ' + esc(p.cantidad) + '<div class="meta">' + esc(p.proveedor || 'Sin proveedor') + ' · ' + esc(p.fecha) +
+          (p.pedido ? '<br>Pedido el ' + esc(p.pedido) : '') + '</div></div><span class="chip c-' + esc(p.estado) + '">' + esc(p.estado === 'Pedido' ? 'Pedido ✔' : 'Por pedir') + '</span></div>';
+      }).join('') : 'Todavía no hay pedidos.';
+    }, function (e) { $('l-pagos').innerHTML = $('l-pedidos').innerHTML = '<div class="msg err">' + esc(e) + '</div>'; });
+  }
+  $('p-prov').addEventListener('change', function () {
+    var p = (D && D.proveedores || []).filter(function (x) { return x[0] === $('p-prov').value; })[0];
+    if (p && p[1] && !$('p-correo').value) $('p-correo').value = p[1];
+  });
+
+  function leerArchivo(input, cb) {
+    var f = input.files[0]; if (!f) return cb(null);
+    if (f.size > 8 * 1024 * 1024) return cb(false);
+    var rd = new FileReader(); rd.onload = function () { cb({ base64: String(rd.result).split(',')[1], tipo: f.type || 'application/pdf' }); }; rd.readAsDataURL(f);
+  }
+  $('b-pago').onclick = function () {
+    var btn = this; msg('m-pago', '');
+    leerArchivo($('p-adj'), function (adj) {
+      if (adj === false) return msg('m-pago', 'El archivo pesa demasiado (máximo 8 MB).');
+      llamar('cajaNuevoPago', [K, { proveedor: $('p-prov').value, correo: $('p-correo').value, importe: $('p-imp').value, limite: $('p-lim').value, concepto: $('p-con').value, adjunto: adj }],
+        function (r) {
+          msg('m-pago', 'Listo: pago ' + r.id + ' enviado a Brenda.', 'ok');
+          ['p-prov', 'p-correo', 'p-imp', 'p-lim', 'p-con', 'p-adj'].forEach(function (id) { $(id).value = ''; }); cargar();
+        }, function (e) { msg('m-pago', e); }, btn);
+    });
+  };
+
+  function fila() {
+    var d = document.createElement('div'); d.className = 'item';
+    d.innerHTML = '<input class="it-p" placeholder="Producto"><input class="it-c" placeholder="Cant."><button class="quitar" type="button">×</button>';
+    d.querySelector('.quitar').onclick = function () { if ($('items').children.length > 1) d.remove(); else d.querySelectorAll('input').forEach(function (i) { i.value = ''; }); };
+    $('items').appendChild(d); return d;
+  }
+  [0, 1, 2].forEach(fila);
+  $('b-mas').onclick = function () { fila().querySelector('input').focus(); };
+  $('b-pedido').onclick = function () {
+    var prov = $('d-prov').value, notas = $('d-notas').value;
+    var items = Array.prototype.map.call($('items').children, function (d) {
+      return { proveedor: prov, producto: d.querySelector('.it-p').value, cantidad: d.querySelector('.it-c').value, notas: notas };
+    }).filter(function (x) { return x.producto.trim(); });
+    llamar('cajaNuevoPedido', [K, items], function (r) {
+      msg('m-pedido', 'Listo: ' + r.n + ' producto' + (r.n === 1 ? '' : 's') + ' en la lista de pedidos.', 'ok');
+      $('items').innerHTML = ''; [0, 1, 2].forEach(fila); $('d-notas').value = ''; cargar();
+    }, function (e) { msg('m-pedido', e); }, this);
+  };
+  cargar();
+</script>
+</body>
+</html>

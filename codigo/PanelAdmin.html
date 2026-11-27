@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --c:#141110; --ok:#1e6b3a; --no:#b3261e; --gris:#667; --madera:#a8774a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#f4f5f6; color:#111; font-size:16px; line-height:1.4; }
+  header { border-bottom:3px solid var(--madera); background:var(--c); color:#fff; padding:14px 16px; font-size:19px; font-weight:700; display:flex; justify-content:space-between; align-items:center; }
+  header button { background:rgba(255,255,255,.15); color:#fff; border:0; border-radius:8px; padding:8px 12px; font-size:15px; cursor:pointer; }
+  main { max-width:900px; margin:0 auto; padding:14px; }
+  .kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .kpi { background:#fff; border-radius:12px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .kpi .n { font-size:28px; font-weight:800; }
+  .kpi .t { font-size:13px; color:var(--gris); }
+  .kpi.alerta .n { color:var(--no); }
+  .tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:4px; margin-bottom:10px; }
+  .tab { flex:0 0 auto; border:1px solid #c9d1d4; background:#fff; border-radius:999px; padding:8px 14px; font-size:15px; cursor:pointer; }
+  .tab.on { background:var(--c); color:#f3ead6; border-color:var(--c); }
+  .tab b { margin-left:4px; }
+  input[type=search] { width:100%; padding:12px 14px; font-size:16px; border:1px solid #c9d1d4; border-radius:10px; margin-bottom:12px; }
+  .card { background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .top { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; cursor:pointer; }
+  .nom { font-weight:700; }
+  .meta { font-size:14px; color:var(--gris); }
+  .badge { flex:0 0 auto; font-size:13px; font-weight:700; padding:4px 10px; border-radius:999px; }
+  .b-Pendiente { background:#fff2cc; color:#7a5b00; } .b-Emitida { background:#cfe2f3; color:#1c4f7a; }
+  .b-Enviada { background:#d9ead3; color:#1e6b3a; } .b-Rechazada { background:#f4cccc; color:#8a1c14; }
+  .tarde { color:var(--no); font-weight:700; }
+  .det { display:none; border-top:1px solid #eee; margin-top:10px; padding-top:10px; font-size:15px; }
+  .card.abierta .det { display:block; }
+  .fila { margin:3px 0; } .fila b { display:inline-block; min-width:120px; }
+  .acc { display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .acc button, .ver { border:0; border-radius:9px; padding:10px 14px; font-size:15px; font-weight:600; cursor:pointer; }
+  .x-ok { background:var(--ok); color:#fff; } .x-em { background:#1c4f7a; color:#fff; } .x-no { background:var(--no); color:#fff; }
+  .x-re, .ver { background:#e3e8ea; color:var(--c); }
+  button:disabled { opacity:.6; }
+  textarea { width:100%; font-size:15px; padding:10px; border:1px solid #999; border-radius:8px; min-height:70px; margin-top:8px; }
+  .aviso { padding:12px; border-radius:10px; margin:8px 0; }
+  .aviso.ok { background:#e5f4ea; color:var(--ok); } .aviso.no { background:#fde8e7; color:var(--no); }
+  .vacio { text-align:center; padding:30px 10px; color:var(--gris); }
+  a { color:var(--c); }
+  .filtros { display:flex; flex-wrap:wrap; gap:8px; align-items:center; background:#fff; border-radius:12px; padding:10px 12px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  .filtros select, .filtros input[type=date] { padding:9px 10px; font-size:15px; border:1px solid #c9d1d4; border-radius:8px; background:#fff; max-width:100%; }
+  .filtros label { font-size:15px; display:flex; gap:6px; align-items:center; }
+  .filtros .limpiar { border:0; background:none; color:var(--c); text-decoration:underline; font-size:14px; cursor:pointer; }
+  .pago { font-size:12px; font-weight:700; padding:3px 8px; border-radius:999px; white-space:nowrap; }
+  .chips { flex:0 0 auto; max-width:46%; display:flex; flex-wrap:wrap; gap:4px; justify-content:flex-end; }
+  .badge { white-space:nowrap; }
+  .p-cobrar { background:#ffe0b2; color:#8a4b00; } .p-pagada { background:#d9ead3; color:#1e6b3a; }
+  .x-pago { background:#b26a00; color:#fff; }
+  .secs { display:flex; gap:6px; overflow-x:auto; background:#2a2421; padding:8px 10px; position:sticky; top:0; z-index:4; }
+  .seg { flex:0 0 auto; border:0; background:none; color:#cbbfa8; font-size:15px; font-weight:700; padding:8px 12px; border-radius:9px; cursor:pointer; }
+  .seg.on { background:var(--madera); color:#fff; }
+  .seg .nb { background:var(--no); color:#fff; border-radius:999px; font-size:11px; padding:1px 6px; margin-left:4px; }
+  .seccion { display:none; } .seccion.on { display:block; }
+  .form label { display:block; font-size:13px; font-weight:700; color:var(--gris); margin:8px 0 3px; }
+  .form input, .form select, .form textarea { width:100%; padding:10px; font-size:15px; border:1px solid #c9d1d4; border-radius:8px; background:#fff; }
+  .dos { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .estrellas { color:#e0a800; letter-spacing:1px; }
+  table.ped { width:100%; border-collapse:collapse; font-size:14px; } table.ped td, table.ped th { border-bottom:1px solid #eee; padding:7px 4px; text-align:left; vertical-align:top; }
+</style>
+</head>
+<body>
+<header><span style="display:flex;align-items:center;gap:10px"><img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt="" style="width:40px;height:40px;border-radius:50%;box-shadow:0 0 0 2px var(--madera)">Panel de facturas</span><button id="recargar">↻ Actualizar</button></header>
+<nav class="secs" id="secs">
+  <button class="seg on" data-s="facturas">🧾 Facturas</button>
+  <button class="seg" data-s="clientes">👥 Clientes</button>
+  <button class="seg" data-s="coment">💬 Opiniones<span class="nb" id="nb-coment" style="display:none"></span></button>
+  <button class="seg" data-s="prov" id="seg-prov" style="display:none">🚚 Proveedores<span class="nb" id="nb-prov" style="display:none"></span></button>
+</nav>
+<main>
+<div class="seccion on" id="s-facturas">
+  <div class="kpis" id="kpis"></div>
+  <div class="tabs" id="tabs"></div>
+  <div class="filtros">
+    <select id="f-periodo">
+      <option value="">Todas las fechas</option><option value="mes">Este mes</option><option value="pasado">Mes pasado</option>
+      <option value="30">Últimos 30 días</option><option value="rango">Elegir fechas…</option>
+    </select>
+    <input type="date" id="f-desde" style="display:none"><input type="date" id="f-hasta" style="display:none">
+    <select id="f-pago"><option value="">Todas las formas de pago</option></select>
+    <input id="f-cliente" list="dl-clientes" placeholder="🔍 Cliente (escribe nombre o RFC)" style="padding:9px 10px;font-size:15px;border:1px solid #c9d1d4;border-radius:8px;min-width:240px;flex:1">
+    <datalist id="dl-clientes"></datalist>
+    <label><input type="checkbox" id="f-cobrar"> Solo por cobrar</label>
+    <button class="limpiar" id="f-limpiar">Quitar filtros</button>
+  </div>
+  <input type="search" id="q" placeholder="Buscar por nombre, RFC, folio, correo o ID…">
+  <div id="info" class="meta" style="margin-bottom:8px"></div>
+  <div id="lista"><div class="card">Cargando…</div></div>
+</div>
+
+<div class="seccion" id="s-clientes">
+  <div style="display:flex;gap:8px;margin-bottom:10px"><input type="search" id="qc" placeholder="Buscar cliente por nombre, RFC o correo…" style="margin:0">
+    <button class="x-ok" id="b-nuevo-cli" style="border:0;border-radius:10px;padding:0 14px;font-weight:700;white-space:nowrap">＋ Nuevo</button></div>
+  <div class="meta" style="margin-bottom:8px">Si el cliente ya ha facturado con nosotros <b>no hace falta pedirle la constancia</b>: solo a clientes nuevos (así no se llena el Drive). Cada 6 meses se le recuerda que la actualice desde su área.</div>
+  <div id="cli-form"></div>
+  <div id="cli-lista"><div class="card">Cargando…</div></div>
+</div>
+
+<div class="seccion" id="s-coment">
+  <div id="com-lista"><div class="card">Cargando…</div></div>
+</div>
+
+<div class="seccion" id="s-prov">
+  <div class="tabs"><button class="seg" style="color:var(--c);background:#fff;border:1px solid #c9d1d4" data-pv="pagos" id="pv-pagos">💸 Pagos</button>
+    <button class="seg" style="color:var(--c);background:#fff;border:1px solid #c9d1d4" data-pv="pedidos" id="pv-pedidos">📦 Pedidos</button></div>
+  <div id="prov-lista"><div class="card">Cargando…</div></div>
+</div>
+</main>
+<script>
+  var K = <?= clave ?>, DUENA = <?= esDuena_(clave) ?>;
+  var EST = { estado: 'Pendiente', texto: '' }, DATOS = null, timer = null;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+
+  function cargar() {
+    $('lista').innerHTML = '<div class="card">Cargando…</div>';
+    google.script.run.withSuccessHandler(pintar).withFailureHandler(function (e) {
+      $('lista').innerHTML = '<div class="aviso no">No se pudo cargar. ' + esc(e && e.message) + '</div>';
+    }).panelDatos(K, EST);
+  }
+
+  function pintar(r) {
+    if (!r || r.ok === false) { $('lista').innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
+    DATOS = r;
+    llenarCombos(r);
+    var c = r.conteos, k = r.kpi;
+    $('kpis').innerHTML =
+      kpi(c.Pendiente, 'Pendientes', false) + kpi(k.atrasadas, 'Pendientes con 2+ días', k.atrasadas > 0) +
+      kpi(k.enviadasMes, 'Enviadas/emitidas este mes', false) + kpi(k.mes, 'Solicitudes este mes', false) +
+      kpi(k.porCobrar, 'Por definir sin pagar', k.porCobrar > 0) +
+      kpi(k.clientesRevisar, 'Clientes por revisar', false) +
+      '<div class="kpi" id="k-app" style="cursor:pointer"><div class="n">' + (k.appClientes || 0) + ' <span style="font-size:15px;font-weight:600;color:var(--gris)">/ ' + (k.appMoviles || 0) + ' móviles</span></div>' +
+      '<div class="t">📲 Clientes con la app (' + (k.appInstaladas || 0) + ' instaladas) · ver lista</div></div>';
+    $('k-app').onclick = verUsoApp;
+    $('tabs').innerHTML = ['Pendiente', 'Emitida', 'Enviada', 'Rechazada', 'Todas'].map(function (e) {
+      var n = e === 'Pendiente' ? 'Pendientes' : e === 'Todas' ? 'Todas' : e + 's';
+      return '<button class="tab' + (r.estado === e ? ' on' : '') + '" data-e="' + e + '">' + n + '<b>' + (c[e] || 0) + '</b></button>';
+    }).join('');
+    $('info').textContent = r.total > r.lista.length ? 'Mostrando ' + r.lista.length + ' de ' + r.total + ' (usa el buscador para afinar)' :
+      r.total + ' resultado' + (r.total === 1 ? '' : 's') + (r.estado === 'Pendiente' ? ' · más antiguas primero' : ' · más recientes primero');
+    if (!r.lista.length) { $('lista').innerHTML = '<div class="card vacio">' + (r.estado === 'Pendiente' && !EST.texto ? '🎉 No hay facturas pendientes.' : 'Sin resultados.') + '</div>'; return; }
+    $('lista').innerHTML = r.lista.map(tarjeta).join('');
+  }
+
+  function kpi(n, t, alerta) { return '<div class="kpi' + (alerta ? ' alerta' : '') + '"><div class="n">' + (n || 0) + '</div><div class="t">' + t + '</div></div>'; }
+
+  function tarjeta(s, i) {
+    var dias = s.dias == null ? '' : s.dias === 0 ? 'hoy' : 'hace ' + s.dias + ' día' + (s.dias === 1 ? '' : 's');
+    var tarde = s.estado === 'Pendiente' && s.dias >= 2;
+    var h = '<div class="card" id="c' + i + '"><div class="top" data-abrir="' + i + '"><div>' +
+      '<div class="nom">' + esc(s.nombre || s.rfc || '(sin nombre)') + '</div>' +
+      '<div class="meta">' + esc(s.id) + ' · ticket ' + esc(s.folio || '—') + ' · ' + esc(s.fecha) +
+      (dias ? ' · <span class="' + (tarde ? 'tarde' : '') + '">' + dias + '</span>' : '') + '</div></div>' +
+      '<span class="chips"><span class="badge b-' + esc(s.estado) + '">' + esc(s.estado || '—') + '</span>' +
+      (s.factura ? '<span class="pago p-pagada">🧾 Factura subida</span>' : '') + (s.porDefinir ? (s.pagada ? '<span class="pago p-pagada">💰 Pagada ' + esc(s.fechaPago) + '</span>' : '<span class="pago p-cobrar">💰 Por cobrar</span>') : '') +
+      '</span></div>' +
+      '<div class="det">' +
+      fila('RFC', s.rfc) + fila('Correo', s.email) + fila('Forma de pago', s.pago) + fila('Uso CFDI', s.uso) +
+      fila('Origen', s.origen) + (s.fechaEmitida ? fila('Emitida/enviada', s.fechaEmitida) : '') +
+      (s.estado !== 'Pendiente' ? fila('Último cambio', s.fechaEstado) : '') +
+      (s.comentario ? fila('Comentario', s.comentario) : '') + (s.notas ? fila('Notas / motivo', s.notas) : '') +
+      '<div class="acc">' +
+      (s.foto ? '<button class="ver" data-ver="' + i + '" data-c="foto">📷 Ticket</button>' : '') +
+      (s.constancia ? '<button class="ver" data-ver="' + i + '" data-c="constancia">📄 Constancia</button>' : '') +
+      (s.factura ? '<button class="ver" data-ver="' + i + '" data-c="fpdf">🧾 Factura PDF</button><button class="ver" data-ver="' + i + '" data-c="fxml">🧾 XML</button>' : '') +
+      '</div><div class="visor" id="v' + i + '"></div>' +
+      '<div class="acc">' + acciones(s, i) + '</div><div id="r' + i + '"></div></div></div>';
+    return h;
+  }
+  function fila(k, v) { return '<div class="fila"><b>' + k + ':</b> ' + esc(v || '—') + '</div>'; }
+  function acciones(s, i) {
+    var b = [];
+    if (s.estado !== 'Enviada') b.push('<button class="x-ok" data-i="' + i + '" data-a="Enviada">✅ Enviada</button>');
+    if (s.estado !== 'Emitida' && s.estado !== 'Enviada') b.push('<button class="x-em" data-i="' + i + '" data-a="Emitida">📄 Emitida</button>');
+    if (s.estado !== 'Rechazada') b.push('<button class="x-no" data-i="' + i + '" data-a="Rechazada">❌ Rechazar</button>');
+    if (s.estado !== 'Pendiente') b.push('<button class="x-re" data-i="' + i + '" data-a="Pendiente">↩️ Volver a pendiente</button>');
+    if (s.porDefinir && !s.pagada) b.push('<button class="x-pago" data-i="' + i + '" data-a="Pagada">💰 Marcar pagada</button>');
+    if (s.pagada) b.push('<button class="x-re" data-i="' + i + '" data-a="QuitarPagada">↩️ Quitar pagada</button>');
+    return b.join('');
+  }
+
+  function cambiar(i, estado, btn) {
+    var s = DATOS.lista[i], r = $('r' + i);
+    if (estado === 'Pagada') return marcarPagada(i, btn);
+    if (estado === 'QuitarPagada') {
+      if (!confirm('¿Quitar la marca de pagada de ' + s.id + '? (no se manda correo)')) return;
+      return llamar(btn, r, 'panelQuitarPagada', [K, s.id], 'Quitada la marca de pagada.');
+    }
+    if (estado === 'Rechazada' && !$('m' + i)) {
+      r.innerHTML = '<textarea id="m' + i + '" placeholder="Motivo (le llega al cliente): ticket de otro mes, falta constancia, RFC no coincide…"></textarea>' +
+        '<div class="acc"><button class="x-no" data-i="' + i + '" data-a="Rechazada">Confirmar rechazo y avisar</button></div>';
+      return;
+    }
+    var aviso = estado === 'Pendiente' ? '¿Volver a poner ' + s.id + ' como pendiente? (al cliente no se le avisa)' :
+      estado === 'Rechazada' ? null : '¿Marcar ' + s.id + ' como ' + estado + '? Al cliente le llega un correo.';
+    if (aviso && !confirm(aviso)) return;
+    var motivo = $('m' + i) ? $('m' + i).value : '';
+    btn.disabled = true; var t = btn.textContent; btn.textContent = 'Guardando…';
+    google.script.run.withSuccessHandler(function (res) {
+      if (!res || res.ok === false) { btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">' + esc(res && res.error) + '</div>'; return; }
+      r.innerHTML = '<div class="aviso ok">Hecho: ' + esc(s.id) + ' ahora está como <b>' + esc(estado) + '</b>.</div>';
+      setTimeout(cargar, 1200);
+    }).withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">Error: ' + esc(e && e.message) + '</div>';
+    }).panelCambiarEstado(K, s.id, estado, motivo);
+  }
+
+  function marcarPagada(i, btn) {
+    var s = DATOS.lista[i], r = $('r' + i);
+    if (!$('fp' + i)) {
+      r.innerHTML = '<div class="fila" style="margin-top:8px"><b>Fecha de pago:</b> <input type="date" id="fp' + i + '" value="' + DATOS.hoy + '"></div>' +
+        '<textarea id="np' + i + '" placeholder="Nota para la contadora (opcional): transferencia, referencia…"></textarea>' +
+        '<div class="acc"><button class="x-pago" data-i="' + i + '" data-a="Pagada">Confirmar pago y avisar a la contadora</button></div>';
+      return;
+    }
+    llamar(btn, r, 'panelMarcarPagada', [K, s.id, $('fp' + i).value, $('np' + i).value],
+      'Marcada como pagada. Aviso enviado a ' + DATOS.correoContadora + '.');
+  }
+  function llamar(btn, r, fn, args, okTxt) {
+    btn.disabled = true; var t = btn.textContent; btn.textContent = 'Guardando…';
+    var run = google.script.run.withSuccessHandler(function (res) {
+      if (!res || res.ok === false) { btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">' + esc(res && res.error) + '</div>'; return; }
+      r.innerHTML = '<div class="aviso ok">' + esc(res.avisado === false ? 'Guardado, pero el correo no se pudo enviar.' : okTxt) + '</div>';
+      setTimeout(cargar, 1200);
+    }).withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = t; r.innerHTML = '<div class="aviso no">Error: ' + esc(e && e.message) + '</div>';
+    });
+    run[fn].apply(run, args);
+  }
+
+  // ---- Filtros ----
+  function ymd(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function leerFiltros() {
+    var p = $('f-periodo').value, h = new Date(), d = '', a = '';
+    if (p === 'mes') { d = ymd(new Date(h.getFullYear(), h.getMonth(), 1)); }
+    else if (p === 'pasado') { d = ymd(new Date(h.getFullYear(), h.getMonth() - 1, 1)); a = ymd(new Date(h.getFullYear(), h.getMonth(), 0)); }
+    else if (p === '30') { d = ymd(new Date(h.getTime() - 29 * 86400000)); }
+    else if (p === 'rango') { d = $('f-desde').value; a = $('f-hasta').value; }
+    $('f-desde').style.display = $('f-hasta').style.display = p === 'rango' ? '' : 'none';
+    EST.desde = d; EST.hasta = a; EST.pago = $('f-pago').value; EST.cliente = rfcDeFiltro($('f-cliente').value); EST.porCobrar = $('f-cobrar').checked;
+  }
+  function rfcDeFiltro(t) {
+    t = String(t || '').trim().toUpperCase(); if (!t) return '';
+    var m = /\(([A-ZÑ&0-9]{12,13})\)\s*$/.exec(t); if (m) return m[1];
+    if (/^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(t)) return t;
+    var c = (DATOS && DATOS.clientes || []).filter(function (x) { return String(x[1]).toUpperCase().indexOf(t) >= 0; });
+    return c.length === 1 ? c[0][0] : '';
+  }
+  var combosListos = false;
+  function llenarCombos(r) {
+    if (combosListos) return; combosListos = true;
+    $('f-pago').innerHTML += (r.formasPago || []).map(function (x) { return '<option value="' + esc(x) + '">' + esc(x) + '</option>'; }).join('');
+    $('dl-clientes').innerHTML = (r.clientes || []).map(function (c) { return '<option value="' + esc(c[1] + ' (' + c[0] + ')') + '">'; }).join('');
+  }
+  ['f-periodo', 'f-desde', 'f-hasta', 'f-pago', 'f-cliente', 'f-cobrar'].forEach(function (id) {
+    $(id).addEventListener('change', function () { leerFiltros(); if (id === 'f-cobrar' && EST.porCobrar) EST.estado = 'Todas'; if (id !== 'f-periodo' || $('f-periodo').value !== 'rango') cargar(); });
+  });
+  $('f-limpiar').onclick = function () {
+    $('f-periodo').value = ''; $('f-pago').value = ''; $('f-cliente').value = ''; $('f-cobrar').checked = false; $('q').value = '';
+    EST.texto = ''; leerFiltros(); cargar();
+  };
+
+  function verUsoApp() {
+    $('lista').innerHTML = '<div class="card">Cargando quién usa la app…</div>'; $('info').textContent = '';
+    google.script.run.withSuccessHandler(function (r) {
+      if (!r || r.ok === false) { $('lista').innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
+      var h = '<div class="card"><b>📲 Uso de la app</b><div class="meta">' + r.clientes + ' clientes identificados · ' + r.moviles + ' móviles · ' + r.instaladas +
+        ' con la app instalada. El cliente aparece con su nombre cuando entra en «Mis facturas».</div></div>';
+      if (!r.lista.length) h += '<div class="card vacio">Todavía nadie ha abierto la app.</div>';
+      h += r.lista.map(function (x) {
+        return '<div class="card"><div class="top"><div><div class="nom">' + esc(x.cliente || 'Sin identificar') + '</div><div class="meta">' +
+          (x.rfc ? 'RFC ' + esc(x.rfc) + ' · ' : '') + esc(x.plat || 'Móvil') + ' · ' + x.aperturas + ' apertura' + (x.aperturas === 1 ? '' : 's') +
+          '<br>Primera vez ' + esc(x.primera) + ' · última ' + esc(x.ultima) + '</div></div>' +
+          '<span class="pago ' + (x.inst ? 'p-pagada">Instalada' : 'p-cobrar">En el navegador') + '</span></div></div>';
+      }).join('');
+      h += '<button class="tab" onclick="cargar()" style="margin-top:6px">← Volver a las solicitudes</button>';
+      $('lista').innerHTML = h;
+    }).withFailureHandler(function (e) { $('lista').innerHTML = '<div class="aviso no">' + esc(e && e.message) + '</div>'; }).panelUsoApp(K);
+  }
+
+  function ver(i, cual, btn) {
+    var s = DATOS.lista[i], v = $('v' + i), t = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Abriendo…';
+    var run2 = google.script.run.withSuccessHandler(function (r) {
+      btn.disabled = false; btn.textContent = t;
+      if (!r || r.ok === false) { v.innerHTML = '<div class="aviso no">' + esc(r && r.error) + '</div>'; return; }
+      var bin = atob(r.base64), arr = new Uint8Array(bin.length);
+      for (var j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+      var url = URL.createObjectURL(new Blob([arr], { type: r.tipo }));
+      v.innerHTML = (/^image\//.test(r.tipo) ? '<img src="' + url + '" alt="" style="width:100%;max-width:520px;border-radius:8px;margin-top:8px;border:1px solid #ccc">' : '') +
+        '<p><a href="' + url + '" target="_blank">🔍 Abrir en grande</a> · <a href="' + url + '" download="' + esc(r.nombre) + '">⬇️ Descargar</a></p>';
+    }).withFailureHandler(function (e) {
+      btn.disabled = false; btn.textContent = t; v.innerHTML = '<div class="aviso no">' + esc(e && e.message) + '</div>';
+    });
+    if (cual === 'fpdf' || cual === 'fxml') run2.panelFactura(K, s.id, cual === 'fxml' ? 'xml' : 'pdf'); else run2.panelArchivo(K, s.id, cual);
+  }
+
+  document.addEventListener('click', function (ev) {
+    var el = ev.target.closest ? ev.target : null; if (!el) return;
+    var sg = el.closest('.seg[data-s]'); if (sg) { seccion(sg.dataset.s); return; }
+    var pv = el.closest('[data-pv]'); if (pv) { PV = pv.dataset.pv; pintarProv(); return; }
+    var tab = el.closest('.tab[data-e]'); if (tab) { EST.estado = tab.dataset.e; cargar(); return; }
+    if (el.closest('#s-facturas') == null) return;
+    var vb = el.closest('button[data-ver]'); if (vb) { ver(Number(vb.dataset.ver), vb.dataset.c, vb); return; }
+    var ab = el.closest('button[data-a]'); if (ab) { cambiar(Number(ab.dataset.i), ab.dataset.a, ab); return; }
+    var top = el.closest('[data-abrir]'); if (top) { $('c' + top.dataset.abrir).classList.toggle('abierta'); }
+  });
+  $('q').addEventListener('input', function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () { EST.texto = $('q').value; cargar(); }, 400);
+  });
+  $('recargar').onclick = function () { var s = document.querySelector('.seg.on').dataset.s; if (s === 'facturas') cargar(); else seccion(s); };
+  $('f-cliente').addEventListener('input', function () { if (!this.value || rfcDeFiltro(this.value)) { leerFiltros(); cargar(); } });
+
+  /* ===== Secciones ===== */
+  function seccion(s) {
+    Array.prototype.forEach.call(document.querySelectorAll('.seg[data-s]'), function (b) { b.classList.toggle('on', b.dataset.s === s); });
+    Array.prototype.forEach.call(document.querySelectorAll('.seccion'), function (d) { d.classList.toggle('on', d.id === 's-' + s); });
+    if (s === 'clientes') buscarClientes(); else if (s === 'coment') cargarComent(); else if (s === 'prov') cargarProv();
+  }
+  function run(fn, args, ok, cont) {
+    var r = google.script.run.withSuccessHandler(function (res) {
+      if (!res || res.ok === false) { if (cont) cont.innerHTML = '<div class="aviso no">' + esc(res && res.error) + '</div>'; return; } ok(res);
+    }).withFailureHandler(function (e) { if (cont) cont.innerHTML = '<div class="aviso no">Error: ' + esc(e && e.message) + '</div>'; });
+    r[fn].apply(r, args);
+  }
+  function opts(lista, sel) { return lista.map(function (x) { return '<option value="' + esc(x[0]) + '"' + (String(x[0]) === String(sel) ? ' selected' : '') + '>' + esc(x[0] + ' — ' + x[1]) + '</option>'; }).join(''); }
+  function abrirArchivo(r, cont) {
+    var bin = atob(r.base64), arr = new Uint8Array(bin.length);
+    for (var j = 0; j < bin.length; j++) arr[j] = bin.charCodeAt(j);
+    var url = URL.createObjectURL(new Blob([arr], { type: r.tipo }));
+    cont.innerHTML = (/^image\//.test(r.tipo) ? '<img src="' + url + '" style="width:100%;max-width:520px;border-radius:8px;margin-top:8px">' : '') +
+      '<p><a href="' + url + '" target="_blank">🔍 Abrir</a> · <a href="' + url + '" download="' + esc(r.nombre) + '">⬇️ Descargar</a></p>';
+  }
+  function leerArchivo(input, cb) {
+    var f = input.files[0]; if (!f) return cb(null);
+    var rd = new FileReader(); rd.onload = function () { cb({ base64: String(rd.result).split(',')[1], tipo: f.type || 'application/pdf' }); }; rd.readAsDataURL(f);
+  }
+
+  /* ===== Clientes ===== */
+  var CLI = null, tc = null;
+  function buscarClientes() {
+    $('cli-lista').innerHTML = '<div class="card">Buscando…</div>';
+    run('panelClientes', [K, $('qc').value], function (r) {
+      CLI = r;
+      $('cli-lista').innerHTML = '<div class="meta" style="margin-bottom:6px">' + (r.total > r.lista.length ? 'Mostrando ' + r.lista.length + ' de ' + r.total : r.total + ' clientes') + '</div>' +
+        (r.lista.length ? r.lista.map(function (c, i) {
+          return '<div class="card" id="cc' + i + '"><div class="top" data-cli="' + i + '"><div><div class="nom">' + esc(c.nombre || '(sin nombre)') + '</div>' +
+            '<div class="meta">' + esc(c.rfc) + ' · ' + esc(c.email || 'sin correo') + (c.extra ? ' + ' + esc(c.extra) : '') + '</div></div><span class="chips">' +
+            (c.revision === 'Pendiente de revisar' ? '<span class="pago p-cobrar">Por revisar</span>' : '') +
+            (c.constancia ? (c.csfVencida ? '<span class="pago p-cobrar">CSF +6 meses</span>' : '<span class="pago p-pagada">CSF ' + esc(c.fechaCSF) + '</span>') : '<span class="pago" style="background:#eee">Sin CSF</span>') +
+            '</span></div><div id="cf' + i + '"></div></div>';
+        }).join('') : '<div class="card vacio">Sin resultados.</div>');
+    }, $('cli-lista'));
+  }
+  function formCliente(c, cont) {
+    c = c || {}; var nuevo = !c.rfc;
+    cont.innerHTML = '<div class="card form">' + (nuevo ? '<b>Nuevo cliente</b>' : '') +
+      '<div class="dos"><div><label>RFC</label><input id="fc-rfc" value="' + esc(c.rfc || '') + '" style="text-transform:uppercase"></div>' +
+      '<div><label>CP fiscal</label><input id="fc-cp" inputmode="numeric" maxlength="5" value="' + esc(c.cp || '') + '"></div></div>' +
+      '<label>Nombre o razón social</label><input id="fc-nom" value="' + esc(c.nombre || '') + '">' +
+      '<label>Régimen fiscal</label><select id="fc-reg"><option value="">—</option>' + opts(CLI.regimenes, c.regimen) + '</select>' +
+      '<label>Uso CFDI</label><select id="fc-uso">' + opts(CLI.usos, c.uso || 'G03') + '</select>' +
+      '<label>Correo principal (ve todas las facturas del RFC)</label><input id="fc-em" type="email" value="' + esc(c.email || '') + '">' +
+      '<label>Otros correos (separados por coma)</label><input id="fc-ex" value="' + esc(c.extra || '') + '">' +
+      '<label>Correos quitados (ya no pueden entrar)</label><input id="fc-qu" value="' + esc(c.quitados || '') + '">' +
+      (nuevo ? '' : '<div class="meta" style="margin-top:8px">Alta: ' + esc(c.alta || '—') + ' · Constancia: ' + (c.constancia ? esc(c.fechaCSF || 'sí') : 'no tenemos') + '</div>') +
+      '<div class="acc"><button class="x-ok" id="fc-ok">💾 Guardar</button>' +
+      (!nuevo && c.constancia ? '<button class="ver" id="fc-csf">📄 Ver constancia</button>' : '') +
+      (!nuevo && c.revision === 'Pendiente de revisar' ? '<button class="x-em" id="fc-rev">✔ Marcar revisado</button>' : '') +
+      (!nuevo && DUENA ? '<button class="x-no" id="fc-del">🗑 Borrar</button>' : '') +
+      '<button class="x-re" id="fc-x">Cerrar</button></div><div id="fc-r"></div><div id="fc-v"></div></div>';
+    var res = $('fc-r');
+    $('fc-x').onclick = function () { cont.innerHTML = ''; };
+    $('fc-ok').onclick = function () {
+      var b = this; b.disabled = true;
+      run('panelClienteGuardar', [K, { rfcOriginal: c.rfc || '', rfc: $('fc-rfc').value, nombre: $('fc-nom').value, cp: $('fc-cp').value, regimen: $('fc-reg').value,
+        uso: $('fc-uso').value, email: $('fc-em').value, extra: $('fc-ex').value, quitados: $('fc-qu').value }],
+        function (r) { res.innerHTML = '<div class="aviso ok">' + esc(r.mensaje) + '</div>'; setTimeout(buscarClientes, 900); }, res);
+      setTimeout(function () { b.disabled = false; }, 1500);
+    };
+    if ($('fc-csf')) $('fc-csf').onclick = function () { run('panelClienteCSF', [K, c.rfc], function (r) { abrirArchivo(r, $('fc-v')); }, $('fc-v')); };
+    if ($('fc-rev')) $('fc-rev').onclick = function () { run('panelClienteRevisado', [K, c.rfc], function () { res.innerHTML = '<div class="aviso ok">Marcado como revisado.</div>'; setTimeout(buscarClientes, 900); }, res); };
+    if ($('fc-del')) $('fc-del').onclick = function () {
+      if (!confirm('¿Borrar el cliente ' + c.rfc + '? Sus solicitudes y facturas se conservan.')) return;
+      run('panelClienteBorrar', [K, c.rfc], function (r) { res.innerHTML = '<div class="aviso ok">' + esc(r.mensaje) + '</div>'; setTimeout(buscarClientes, 900); }, res);
+    };
+  }
+  $('qc').addEventListener('input', function () { clearTimeout(tc); tc = setTimeout(buscarClientes, 400); });
+  $('b-nuevo-cli').onclick = function () { if (!CLI) return; formCliente(null, $('cli-form')); };
+  $('cli-lista').addEventListener('click', function (ev) {
+    var t = ev.target.closest('[data-cli]'); if (!t) return;
+    var i = Number(t.dataset.cli), cont = $('cf' + i);
+    if (cont.innerHTML) { cont.innerHTML = ''; return; }
+    formCliente(CLI.lista[i], cont);
+  });
+
+  /* ===== Opiniones (errores, mejoras, valoraciones) ===== */
+  function estrellas(n) { return '<span class="estrellas">' + '★★★★★'.slice(0, n) + '<span style="color:#ddd">' + '★★★★★'.slice(n) + '</span></span>'; }
+  function cargarComent() {
+    $('com-lista').innerHTML = '<div class="card">Cargando…</div>';
+    run('panelComentarios', [K], function (r) {
+      var nb = $('nb-coment'); nb.style.display = r.nuevos ? '' : 'none'; nb.textContent = r.nuevos;
+      var ic = { 'Error': '🐞', 'Mejora': '💡', 'Duda': '❓', 'Valoración': '⭐', 'Quiero mi app': '📲' };
+      $('com-lista').innerHTML = '<div class="kpis">' + kpi(r.media ? r.media + ' ★' : '—', 'Valoración media (' + r.valoraciones + ' opiniones)', false) + kpi(r.nuevos, 'Nuevos sin revisar', r.nuevos > 0) + '</div>' +
+        '<div class="meta" style="margin-bottom:8px">Al pulsar <b>Validar</b> se abre GitHub con el issue ya escrito: solo tienes que pulsar «Create».</div>' +
+        (r.lista.length ? r.lista.map(function (c) {
+          return '<div class="card"><div class="top"><div><div class="nom">' + (ic[c.tipo] || '') + ' ' + esc(c.tipo) + (c.estrellas ? ' ' + estrellas(c.estrellas) : '') + '</div>' +
+            '<div class="meta">' + esc(c.id) + ' · ' + esc(c.fecha) + (c.nombre ? ' · ' + esc(c.nombre) : '') + (c.contacto ? ' · ' + esc(c.contacto) : '') + (c.rfc ? ' · ' + esc(c.rfc) : '') + '</div></div>' +
+            '<span class="badge ' + (c.estado === 'Nuevo' ? 'b-Pendiente' : c.estado === 'Descartado' ? 'b-Rechazada' : 'b-Enviada') + '">' + esc(c.estado) + '</span></div>' +
+            (c.texto ? '<div style="margin-top:8px;white-space:pre-wrap">' + esc(c.texto) + '</div>' : '') +
+            '<div class="acc">' + (c.estado === 'Nuevo' && ['Error', 'Mejora', 'Duda'].indexOf(c.tipo) >= 0 ? '<button class="x-ok" data-com="' + esc(c.id) + '" data-st="Validado">✔ Validar → GitHub</button>' : '') +
+            (c.issue ? '<a class="ver" style="text-decoration:none" target="_blank" href="' + esc(c.issue) + '">Abrir issue en GitHub</a>' : '') +
+            (c.estado === 'Validado' ? '<button class="x-em" data-com="' + esc(c.id) + '" data-st="Hecho">✅ Hecho</button>' : '') +
+            (c.estado === 'Nuevo' ? (['Valoración', 'Quiero mi app'].indexOf(c.tipo) >= 0 ? '<button class="x-em" data-com="' + esc(c.id) + '" data-st="Hecho">✔ Visto</button>' :
+              '<button class="x-no" data-com="' + esc(c.id) + '" data-st="Descartado">Descartar</button>') : '') +
+            '</div></div>';
+        }).join('') : '<div class="card vacio">Todavía no hay opiniones.</div>');
+    }, $('com-lista'));
+  }
+  $('com-lista').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-com]'); if (!b) return;
+    var gh = b.dataset.st === 'Validado' ? window.open('about:blank', '_blank') : null;
+    b.disabled = true;
+    run('panelComentarioEstado', [K, b.dataset.com, b.dataset.st], function (r) {
+      if (gh && r.url) gh.location = r.url; else if (gh) gh.close();
+      cargarComent();
+    }, null);
+  });
+
+  /* ===== Proveedores: pagos (diario) y pedidos (semanal) ===== */
+  var PV = 'pagos', CAJA = null;
+  function cargarProv() {
+    $('prov-lista').innerHTML = '<div class="card">Cargando…</div>';
+    run('cajaDatos', [K], function (r) { CAJA = r; marcarNb(); pintarProv(); }, $('prov-lista'));
+  }
+  function marcarNb() {
+    var n = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }).length + CAJA.pedidos.filter(function (p) { return p.estado !== 'Pedido'; }).length;
+    var nb = $('nb-prov'); nb.style.display = n ? '' : 'none'; nb.textContent = n;
+  }
+  function pintarProv() {
+    if (!CAJA) return;
+    $('pv-pagos').style.background = PV === 'pagos' ? 'var(--c)' : '#fff'; $('pv-pagos').style.color = PV === 'pagos' ? '#fff' : 'var(--c)';
+    $('pv-pedidos').style.background = PV === 'pedidos' ? 'var(--c)' : '#fff'; $('pv-pedidos').style.color = PV === 'pedidos' ? '#fff' : 'var(--c)';
+    if (PV === 'pagos') {
+      var pend = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }), hechos = CAJA.pagos.filter(function (p) { return p.estado === 'Pagado'; });
+      var tot = pend.reduce(function (a, p) { return a + p.importe; }, 0);
+      $('prov-lista').innerHTML = '<div class="meta" style="margin-bottom:8px"><b>' + pend.length + ' pagos pendientes</b> · $' + tot.toFixed(2) + '. Te llega un resumen cada día a las 9:00.</div>' +
+        (pend.concat(hechos.slice(0, 20)).map(function (p) {
+          var i = CAJA.pagos.indexOf(p);
+          return '<div class="card"><div class="top"><div><div class="nom">' + esc(p.proveedor) + ' · $' + p.importe.toFixed(2) + '</div>' +
+            '<div class="meta">' + esc(p.id) + ' · pedido ' + esc(p.fecha) + (p.limite ? ' · <b>antes del ' + esc(p.limite) + '</b>' : '') + '<br>' + esc(p.concepto || '') +
+            (p.correo ? '<br>✉️ ' + esc(p.correo) : '<br>Sin correo del proveedor') + (p.pagado ? '<br>Pagado ' + esc(p.pagado) + (p.aviso ? ' · ' + esc(p.aviso) : '') : '') + '</div></div>' +
+            '<span class="badge ' + (p.estado === 'Pagado' ? 'b-Enviada' : 'b-Pendiente') + '">' + esc(p.estado) + '</span></div>' +
+            '<div class="acc">' + (p.adjunto ? '<button class="ver" data-arch="' + i + '" data-c="adjunto">📎 Factura/nota</button>' : '') +
+            (p.comprobante ? '<button class="ver" data-arch="' + i + '" data-c="comprobante">🧾 Comprobante</button>' : '') +
+            (p.estado !== 'Pagado' && DUENA ? '<button class="x-ok" data-pagar="' + i + '">💸 He pagado</button>' : '') + '</div><div id="pp' + i + '"></div></div>';
+        }).join('') || '<div class="card vacio">No hay pagos pedidos.</div>');
+    } else {
+      var pe = CAJA.pedidos.filter(function (p) { return p.estado !== 'Pedido'; }), he = CAJA.pedidos.filter(function (p) { return p.estado === 'Pedido'; }).slice(0, 40);
+      var grupos = {};
+      pe.forEach(function (p) { var k = p.proveedor || 'Sin proveedor'; (grupos[k] = grupos[k] || []).push(p); });
+      $('prov-lista').innerHTML = '<div class="meta" style="margin-bottom:8px"><b>' + pe.length + ' productos por pedir</b>. Los lunes te llega la lista de la semana.</div>' +
+        Object.keys(grupos).sort().map(function (g) {
+          return '<div class="card"><div class="nom">🚚 ' + esc(g) + '</div><table class="ped">' + grupos[g].map(function (p) {
+            return '<tr><td style="width:28px"><input type="checkbox" class="ck-ped" value="' + esc(p.id) + '"' + (DUENA ? '' : ' disabled') + '></td><td><b>' + esc(p.producto) + '</b>' +
+              (p.notas ? '<div class="meta">' + esc(p.notas) + '</div>' : '') + '</td><td>' + esc(p.cantidad) + '</td><td class="meta">' + esc(p.fecha) + '</td></tr>';
+          }).join('') + '</table></div>';
+        }).join('') + (pe.length && DUENA ? '<button class="x-ok" id="b-pedidos" style="width:100%;padding:14px;border:0;border-radius:10px;font-weight:700">✅ Marcar seleccionados como pedidos</button><div id="r-ped"></div>' : '') +
+        (pe.length ? '' : '<div class="card vacio">No hay nada por pedir. 🎉</div>') +
+        (he.length ? '<div class="card"><div class="nom">Ya pedidos (recientes)</div><table class="ped">' + he.map(function (p) {
+          return '<tr><td>' + esc(p.producto) + '</td><td>' + esc(p.cantidad) + '</td><td class="meta">' + esc(p.proveedor) + '</td><td class="meta">' + esc(p.pedido) + '</td></tr>'; }).join('') + '</table></div>' : '');
+      if ($('b-pedidos')) $('b-pedidos').onclick = function () {
+        var ids = Array.prototype.map.call(document.querySelectorAll('.ck-ped:checked'), function (c) { return c.value; });
+        if (!ids.length) { $('r-ped').innerHTML = '<div class="aviso no">Marca al menos un producto.</div>'; return; }
+        this.disabled = true;
+        run('panelPedidosHechos', [K, ids], function (r) { $('r-ped').innerHTML = '<div class="aviso ok">' + r.n + ' marcados como pedidos.</div>'; setTimeout(cargarProv, 900); }, $('r-ped'));
+      };
+    }
+  }
+  $('prov-lista').addEventListener('click', function (ev) {
+    var a = ev.target.closest('button[data-arch]');
+    if (a) { var p = CAJA.pagos[Number(a.dataset.arch)]; run('cajaArchivo', [K, p.id, a.dataset.c], function (r) { abrirArchivo(r, $('pp' + a.dataset.arch)); }, $('pp' + a.dataset.arch)); return; }
+    var b = ev.target.closest('button[data-pagar]'); if (!b) return;
+    var i = Number(b.dataset.pagar), p = CAJA.pagos[i], cont = $('pp' + i);
+    if (!$('cp' + i)) {
+      cont.innerHTML = '<div class="form" style="margin-top:8px"><label>Comprobante de pago (foto o PDF)</label><input type="file" id="cp' + i + '" accept="image/*,application/pdf">' +
+        (p.correo ? '<label style="display:flex;gap:6px;align-items:center;font-weight:600;color:#111"><input type="checkbox" id="av' + i + '" checked style="width:auto"> Enviárselo a ' + esc(p.correo) + '</label>' : '<div class="meta">Sin correo del proveedor: solo se guardará.</div>') +
+        '<div class="acc"><button class="x-ok" data-pagar="' + i + '">Confirmar pago</button></div><div id="rp' + i + '"></div></div>';
+      return;
+    }
+    b.disabled = true;
+    leerArchivo($('cp' + i), function (arch) {
+      run('panelPagoHecho', [K, p.id, arch, $('av' + i) ? $('av' + i).checked : false], function (r) {
+        $('rp' + i).innerHTML = '<div class="aviso ok">Pago marcado' + (r.aviso ? '. ' + esc(r.aviso) : '') + '.</div>'; setTimeout(cargarProv, 1200);
+      }, $('rp' + i));
+    });
+  });
+
+  if (DUENA) { $('seg-prov').style.display = ''; run('cajaDatos', [K], function (r) { CAJA = r; marcarNb(); }, null); }
+  run('panelComentarios', [K], function (r) { var nb = $('nb-coment'); nb.style.display = r.nuevos ? '' : 'none'; nb.textContent = r.nuevos; }, null);
+  cargar();
+</script>
+</body>
+</html>

@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root { --negro:#141110; --crema:#f3ead6; --madera:#a8774a; --ok:#1e6b3a; --err:#b3261e; --gris:#6b625a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; background:#f5f1ea; color:#1d1a17; font-size:16px; padding-bottom:24px; }
+  header { background:var(--negro); color:var(--crema); padding:14px 16px; display:flex; align-items:center; gap:14px; border-bottom:3px solid var(--madera); }
+  header img { width:62px; height:62px; border-radius:50%; box-shadow:0 0 0 2px var(--madera); }
+  header h1 { margin:0; font-size:21px; } header p { margin:3px 0 0; font-size:13px; opacity:.8; }
+  main { max-width:560px; margin:0 auto; padding:16px; }
+  .card { background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+  h2 { font-size:18px; margin:0 0 8px; }
+  details { border-bottom:1px solid #eee; padding:12px 0; } details:last-child { border-bottom:0; }
+  summary { font-weight:700; cursor:pointer; list-style:none; display:flex; justify-content:space-between; gap:10px; }
+  summary::after { content:'＋'; color:var(--madera); } details[open] summary::after { content:'－'; }
+  details p, details li { color:#3b3530; font-size:15px; line-height:1.5; }
+  label { display:block; font-weight:600; font-size:14px; margin:12px 0 4px; }
+  input, select, textarea { width:100%; padding:13px; font-size:16px; border:1px solid #cfc6b8; border-radius:10px; background:#fff; font-family:inherit; }
+  textarea { min-height:100px; }
+  button.grande { width:100%; padding:14px; font-size:16px; font-weight:700; border:0; border-radius:12px; background:var(--negro); color:var(--crema); margin-top:14px; cursor:pointer; }
+  button:disabled { opacity:.6; }
+  .msg { padding:12px; border-radius:10px; margin-top:12px; font-size:14px; } .msg.err { background:#fde8e7; color:var(--err); } .msg.ok { background:#e5f4ea; color:var(--ok); }
+  .nota { font-size:14px; color:var(--gris); }
+  .tipos { display:flex; gap:8px; flex-wrap:wrap; }
+  .tipos button { flex:1; min-width:30%; border:2px solid #d8cfc0; background:#fff; border-radius:12px; padding:10px 6px; font-size:14px; font-weight:700; cursor:pointer; }
+  .tipos button.on { border-color:var(--madera); background:#faf3e6; }
+  .estrellas { display:flex; justify-content:center; gap:6px; margin:6px 0; }
+  .estrellas button { border:0; background:none; font-size:40px; color:#ddd; cursor:pointer; padding:0; line-height:1; }
+  .estrellas button.on { color:#e0a800; }
+  .promo { background:linear-gradient(135deg,#141110,#3b2a1c); color:var(--crema); }
+  .promo h2 { color:#fff; } .promo .nota { color:#d9cbb2; }
+  .promo button.grande { background:var(--madera); color:#fff; }
+</style>
+</head>
+<body>
+<header>
+  <img src="https://brenndhl.github.io/EL-PERMACHAN/logo-256.png" alt="El Permachan">
+  <div><h1>Ayuda</h1><p>Restaurante El Permachan</p></div>
+</header>
+<main>
+  <div class="card">
+    <h2>Preguntas frecuentes</h2>
+    <details><summary>¿Cómo pido mi factura?</summary>
+      <p>En la pestaña <b>Pedir factura</b>: escribe tu RFC, el folio del ticket (abajo a la derecha, por ejemplo <b>#1-48349</b>), la forma de pago y sube una foto del ticket. Te llega un correo confirmando que la recibimos.</p></details>
+    <details><summary>¿Tengo que subir mi Constancia de Situación Fiscal?</summary>
+      <p>Solo la primera vez. Si ya te hemos facturado antes, tenemos tus datos y no hace falta. Te pediremos que la actualices <b>cada 6 meses</b> desde <b>Mis facturas → Mis datos</b>.</p></details>
+    <details><summary>¿Cuánto tarda mi factura?</summary>
+      <p>Normalmente de 1 a 3 días hábiles. Cuando esté lista te llega un correo «¡Ya está tu factura!» y aparece en <b>Mis facturas</b> para descargarla.</p></details>
+    <details><summary>¿Cómo veo y descargo mis facturas?</summary>
+      <p>En <b>Mis facturas</b>: escribe tu RFC, elige tu correo y escribe el código de 6 cifras que te enviamos. Verás cada factura con su estado y los botones para bajar el <b>PDF</b> y el <b>XML</b>. El móvil recuerda tu sesión 90 días.</p></details>
+    <details><summary>En mi empresa somos varios con el mismo RFC</summary>
+      <p>Cada persona entra con <b>su propio correo</b> y ve solo las facturas que pidió con ese correo. El correo principal registrado del RFC ve todas. Si tu correo no aparece en la lista, pide una factura con él y quedará añadido.</p></details>
+    <details><summary>No me llega el código o el correo</summary>
+      <p>Revisa la carpeta de <b>spam o promociones</b>. El código caduca a los 15 minutos; puedes pedir otro. Si sigue sin llegar, escríbenos con el botón de abajo.</p></details>
+    <details><summary>Me equivoqué en mis datos fiscales</summary>
+      <p>Entra en <b>Mis facturas → Mis datos</b>, corrígelos y sube tu constancia actualizada. Los revisamos antes de tu próxima factura.</p></details>
+    <details><summary>Rechazaron mi solicitud, ¿qué hago?</summary>
+      <p>En el correo y en <b>Mis facturas</b> verás el motivo (por ejemplo, ticket de otro mes o RFC que no coincide). Corrígelo y vuelve a pedirla.</p></details>
+    <details><summary>¿Cómo instalo la app en mi móvil?</summary>
+      <p><b>Android:</b> pulsa «Instalar la app» o el menú ⋮ de Chrome → <i>Instalar aplicación</i>.<br><b>iPhone:</b> en Safari pulsa Compartir ⬆️ → <i>Añadir a pantalla de inicio</i>. Se actualiza sola.</p></details>
+  </div>
+
+  <div class="card">
+    <h2>¿Algo no funciona o tienes una idea?</h2>
+    <p class="nota">Cuéntanoslo: lo revisamos y lo mejoramos.</p>
+    <div class="tipos" id="tipos"><button data-t="Error" class="on">🐞 Algo falla</button><button data-t="Mejora">💡 Una mejora</button><button data-t="Duda">❓ Una duda</button></div>
+    <label for="c-texto">Escríbelo aquí</label>
+    <textarea id="c-texto" maxlength="2000" placeholder="Qué pasó, en qué pantalla, qué esperabas…"></textarea>
+    <label for="c-contacto">Tu correo o teléfono (opcional, para responderte)</label>
+    <input id="c-contacto" maxlength="120">
+    <button class="grande" id="b-com">Enviar</button>
+    <div id="m-com"></div>
+  </div>
+
+  <div class="card" style="text-align:center">
+    <h2>¿Te gusta la app?</h2>
+    <p class="nota">Valórala y dinos qué mejorarías.</p>
+    <div class="estrellas" id="estrellas"><button data-n="1">★</button><button data-n="2">★</button><button data-n="3">★</button><button data-n="4">★</button><button data-n="5">★</button></div>
+    <textarea id="v-texto" maxlength="1000" placeholder="¿Qué te parece? ¿Qué le añadirías? (opcional)" style="min-height:70px"></textarea>
+    <button class="grande" id="b-val">Enviar valoración</button>
+    <div id="m-val"></div>
+  </div>
+
+  <div class="card promo">
+    <h2>📲 ¿Te gustaría tener tu propia app?</h2>
+    <p class="nota">Como esta, para tu negocio: pedidos, citas, facturas, catálogo… Te la diseñamos y preparamos. Déjanos tus datos y te contactamos.</p>
+    <label for="a-nombre" style="color:#fff">Nombre o negocio</label><input id="a-nombre" maxlength="100">
+    <label for="a-contacto" style="color:#fff">Teléfono o correo</label><input id="a-contacto" maxlength="120">
+    <label for="a-texto" style="color:#fff">¿Qué te gustaría que hiciera? (opcional)</label><textarea id="a-texto" maxlength="1500" style="min-height:70px"></textarea>
+    <button class="grande" id="b-app">Quiero mi app</button>
+    <div id="m-app"></div>
+  </div>
+  <p class="nota" style="text-align:center">¿Necesitas hablar con nosotros? <a href="mailto:elpermachan@gmail.com">elpermachan@gmail.com</a></p>
+</main>
+<script>
+  var TIPO = 'Error', EST = 0;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function msg(id, t, tipo) { $(id).innerHTML = t ? '<div class="msg ' + (tipo || 'err') + '">' + esc(t) + '</div>' : ''; }
+  function token() { try { return localStorage.getItem('ep_mf') || ''; } catch (e) { return ''; } }
+  function enviar(datos, mid, btn, limpiar) {
+    var t = btn.textContent; btn.disabled = true; btn.textContent = 'Enviando…'; msg(mid, '');
+    google.script.run.withSuccessHandler(function (r) {
+      btn.disabled = false; btn.textContent = t;
+      if (!r || r.ok === false) return msg(mid, r && r.error);
+      msg(mid, r.mensaje, 'ok'); limpiar();
+    }).withFailureHandler(function () { btn.disabled = false; btn.textContent = t; msg(mid, 'No hay conexión. Inténtalo de nuevo.'); })
+      .enviarComentario(datos, token());
+  }
+  $('tipos').onclick = function (ev) {
+    var b = ev.target.closest('button'); if (!b) return; TIPO = b.dataset.t;
+    Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle('on', x === b); });
+  };
+  $('estrellas').onclick = function (ev) {
+    var b = ev.target.closest('button'); if (!b) return; EST = Number(b.dataset.n);
+    Array.prototype.forEach.call(this.children, function (x) { x.classList.toggle('on', Number(x.dataset.n) <= EST); });
+  };
+  $('b-com').onclick = function () {
+    enviar({ tipo: TIPO, texto: $('c-texto').value, contacto: $('c-contacto').value }, 'm-com', this, function () { $('c-texto').value = ''; });
+  };
+  $('b-val').onclick = function () {
+    enviar({ tipo: 'Valoración', estrellas: EST, texto: $('v-texto').value }, 'm-val', this, function () { $('v-texto').value = ''; });
+  };
+  $('b-app').onclick = function () {
+    enviar({ tipo: 'Quiero mi app', nombre: $('a-nombre').value, contacto: $('a-contacto').value, texto: $('a-texto').value || 'Quiere información' }, 'm-app', this,
+      function () { $('a-nombre').value = $('a-contacto').value = $('a-texto').value = ''; });
+  };
+</script>
+</body>
+</html>
