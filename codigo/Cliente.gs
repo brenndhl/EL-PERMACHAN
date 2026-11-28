@@ -295,6 +295,7 @@ function procesarFacturasSubidas() {
     const ahora = Date.now(), res = [];
     Object.keys(grupos).forEach(base => {
       const g = grupos[base];
+      if (base.indexOf('correo_') === 0) g.deCorreo = true;
       const ultimo = Math.max(g.pdf ? g.pdf.getLastUpdated().getTime() : 0, g.xml ? g.xml.getLastUpdated().getTime() : 0);
       if ((!g.pdf || !g.xml) && ahora - ultimo < ESPERA_PAREJA_MIN_ * 60000) return;   // esperando a la pareja
       try { res.push(procesarGrupo_(base, g, procesadas, revisar)); }
@@ -315,7 +316,7 @@ function procesarGrupo_(base, g, procesadas, revisar) {
   if (g.xml && !cfdi) return aRevisar_(g, revisar, base, 'El XML no es un CFDI válido.');
   if (cfdi && cfdi.tipo === 'P') return procesarComplemento_(base, g, cfdi, procesadas, revisar);
   const sols = leerTabla_(hoja_(HOJAS.SOLICITUDES)).filter(s => s['ID'] && !facts[String(s['ID'])] && s['Estado'] !== 'Rechazada');
-  let s = null, motivo = '';
+  let s = null, motivo = '', notaAuto = '';
   const idSol = g.id || (g.carpeta ? '' : idDeNombre_(base));
   if (g.carpeta && !idSol) return aRevisar_(g, revisar, base, 'La carpeta "' + g.carpeta.getName() + '" no es un número de solicitud (por ejemplo 597).');
   if (idSol) {
@@ -337,6 +338,17 @@ function procesarGrupo_(base, g, procesadas, revisar) {
     const delRfc = sols.filter(x => normalizarRFC(x['RFC']) === cfdi.rfc);
     const abiertas = delRfc.filter(x => x['Estado'] === 'Pendiente' || x['Estado'] === 'Emitida');
     if (abiertas.length === 1) s = abiertas[0];
+    else if (abiertas.length > 1 && g.xml) {
+      // Varias abiertas del mismo RFC: primero, el número de ticket escrito dentro del XML; si no, la más antigua.
+      const xmlTxt = g.xml.getBlob().getDataAsString('UTF-8');
+      const conTicket = abiertas.filter(x => { const n = String(normalizarFolio(x['Folio ticket'])).split('-').pop(); return n.length >= 3 && new RegExp('(^|[^0-9])' + n + '([^0-9]|$)').test(xmlTxt); });
+      if (conTicket.length === 1) s = conTicket[0];
+      else if (g.deCorreo) {
+        s = abiertas.slice().sort((a, b) => (a['Fecha solicitud'] instanceof Date ? a['Fecha solicitud'].getTime() : 0) - (b['Fecha solicitud'] instanceof Date ? b['Fecha solicitud'].getTime() : 0))[0];
+        notaAuto = 'Asignada a la más antigua de ' + abiertas.length + ' solicitudes abiertas del RFC (llegó por correo de la contadora): revísalo.';
+      }
+      if (!s) motivo = (motivo ? motivo + ' ' : '') + 'El cliente ' + cfdi.rfc + ' tiene ' + abiertas.length + ' solicitudes abiertas: pon el folio del ticket en el nombre del archivo.';
+    }
     else if (!abiertas.length && delRfc.length === 1) s = delRfc[0];
     else motivo = (motivo ? motivo + ' ' : '') + (abiertas.length > 1
       ? 'El cliente ' + cfdi.rfc + ' tiene ' + abiertas.length + ' solicitudes abiertas: pon el folio del ticket en el nombre del archivo.'
@@ -360,6 +372,7 @@ function procesarGrupo_(base, g, procesadas, revisar) {
   if (f) {
     const ahora = new Date();
     const cambios = { 'Estado': 'Enviada', 'Fecha estado': ahora, 'Último aviso': 'Enviada' };
+    if (notaAuto) cambios['Notas / motivo'] = notaAuto;
     if (!(f.datos['Fecha emitida'] instanceof Date)) cambios['Fecha emitida'] = ahora;
     actualizarFila_(hoja_(HOJAS.SOLICITUDES), COL_SOLICITUDES, f.fila, cambios);
   }

@@ -857,6 +857,80 @@ function panelCajeraGuardar(k, c) {
   return { ok: true, codigo: codigo, mensaje: nombre + ' dada de alta. Su código es ' + codigo + '.' };
 }
 
+/* ============================ FACTURAS POR CORREO DE LA CONTADORA ============================ */
+// La contadora manda al final del día un correo a elpermachan@gmail.com con los PDF y XML (o un ZIP).
+// Cada 30 minutos el sistema lee esos correos, guarda los archivos en la carpeta de facturas y los procesa
+// igual que si ella los hubiera subido: se los manda al cliente y aparecen en «Mis facturas».
+
+const ETIQUETA_IMPORTADO_ = 'EP facturas importadas';
+
+function remitentesContadora_() {
+  const l = listaCorreos_([cfg_().CORREO_CONTADORA, 'jovhys@hotmail.com', cfg_().CORREOS_FACTURAS_EXTRA].join(','));
+  return l.filter((x, i) => l.indexOf(x) === i);
+}
+
+function importarCorreosContadora() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return 'Ocupado';
+  let guardados = 0, correos = 0;
+  try {
+    const etiqueta = GmailApp.getUserLabelByName(ETIQUETA_IMPORTADO_) || GmailApp.createLabel(ETIQUETA_IMPORTADO_);
+    const q = '(' + remitentesContadora_().map(c => 'from:' + c).join(' OR ') + ') has:attachment newer_than:10d -label:"' + ETIQUETA_IMPORTADO_ + '"';
+    const props = PropertiesService.getScriptProperties();
+    const hechos = JSON.parse(props.getProperty('MSG_IMPORTADOS') || '[]');
+    const carpeta = carpetaSubida_();
+    GmailApp.search(q, 0, 30).forEach(hilo => {
+      hilo.getMessages().forEach(m => {
+        if (hechos.indexOf(m.getId()) >= 0) return;
+        const archivos = [];
+        m.getAttachments({ includeInlineImages: false }).forEach(a => {
+          const n = String(a.getName() || '').toLowerCase();
+          if (/\.zip$/.test(n)) { try { Utilities.unzip(a.copyBlob()).forEach(b => archivos.push(b)); } catch (err) { Logger.log('ZIP ' + n + ': ' + err); } }
+          else if (/\.(pdf|xml)$/.test(n)) archivos.push(a.copyBlob());
+        });
+        emparejarYGuardar_(archivos, carpeta, m.getId()).forEach(() => guardados++);
+        hechos.push(m.getId()); correos++;
+      });
+      hilo.addLabel(etiqueta);
+    });
+    props.setProperty('MSG_IMPORTADOS', JSON.stringify(hechos.slice(-400)));
+  } finally { lock.releaseLock(); }
+  if (!guardados) return 'Sin facturas nuevas por correo';
+  const res = procesarFacturasSubidas();
+  const lineas = Array.isArray(res) ? res : [String(res)];
+  enviarCorreo_(CORREO_CONTACTO_APPS_, 'Facturas recibidas por correo de la contadora: ' + guardados + ' archivos',
+    '<p>He leído ' + correos + ' correo(s) de la contadora y he subido sus facturas a la app. Resultado:</p><ul>' +
+    lineas.map(l => '<li>' + esc_(l) + '</li>').join('') + '</ul><p>Lo que no se pudo asignar está en la carpeta <b>Revisar</b> y en el panel.</p>');
+  return guardados + ' archivos importados';
+}
+
+/** Junta cada PDF con su XML (por nombre, UUID o serie-folio) y los guarda con el mismo nombre en la carpeta. */
+function emparejarYGuardar_(blobs, carpeta, idMsg) {
+  const xmls = [], pdfs = [];
+  blobs.forEach(b => { const n = String(b.getName() || '').toLowerCase(); if (/\.xml$/.test(n)) xmls.push(b); else if (/\.pdf$/.test(n)) pdfs.push(b); });
+  const usados = [], guardados = [];
+  const sufijo = String(idMsg).slice(-6);
+  xmls.forEach((x, i) => {
+    const c = leerCFDI_(x.getDataAsString('UTF-8'));
+    const base = x.getName().replace(/\.xml$/i, '');
+    const claves = [base.toLowerCase(), c && c.uuid ? c.uuid.toLowerCase() : '', c && c.folio ? String(c.folio).toLowerCase() : ''].filter(String);
+    let p = pdfs.filter(q => usados.indexOf(q) < 0).filter(q => { const n = q.getName().toLowerCase(); return claves.some(k => k.length >= 3 && n.indexOf(k) >= 0); })[0];
+    if (!p && xmls.length === 1 && pdfs.length === 1) p = pdfs[0];
+    const nombre = 'correo_' + sufijo + '_' + (c && c.uuid ? c.uuid : base).replace(/[^A-Za-z0-9_-]/g, '_');
+    guardados.push(carpeta.createFile(x.setName(nombre + '.xml')));
+    if (p) { usados.push(p); guardados.push(carpeta.createFile(p.setName(nombre + '.pdf'))); }
+  });
+  pdfs.filter(q => usados.indexOf(q) < 0).forEach(q => guardados.push(carpeta.createFile(q.setName('correo_' + sufijo + '_' + q.getName().replace(/[^A-Za-z0-9_.-]/g, '_')))));
+  return guardados;
+}
+
+/** Ejecutar UNA vez desde el editor (pide permiso para leer Gmail): activa la lectura cada 30 minutos. */
+function instalarCorreosContadora() {
+  ScriptApp.getProjectTriggers().forEach(t => { if (t.getHandlerFunction() === 'importarCorreosContadora') ScriptApp.deleteTrigger(t); });
+  ScriptApp.newTrigger('importarCorreosContadora').timeBased().everyMinutes(30).create();
+  return 'Activado. Remitentes: ' + remitentesContadora_().join(', ') + ' · ' + importarCorreosContadora();
+}
+
 /* ============================ INSTALACIÓN ============================ */
 
 function instalarExtras() {

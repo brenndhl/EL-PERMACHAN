@@ -12,7 +12,8 @@
   header img { width:46px; height:46px; border-radius:50%; box-shadow:0 0 0 2px var(--madera); }
   header b { font-size:20px; }
   .tabs { display:flex; background:#2a2421; }
-  .tabs button { flex:1; padding-left:4px; padding-right:4px; font-size:15px; border:0; background:none; color:#cbbfa8; font-size:17px; font-weight:700; padding:14px; cursor:pointer; }
+  body { overflow-x:hidden; }
+  .tabs button { flex:1 1 0; min-width:0; border:0; background:none; color:#cbbfa8; font-size:12.5px; font-weight:700; padding:10px 2px; cursor:pointer; line-height:1.25; white-space:normal; }
   .tabs button.on { background:var(--madera); color:#fff; }
   main { max-width:560px; margin:0 auto; padding:14px; }
   .card { background:#fff; border-radius:14px; padding:16px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
@@ -51,7 +52,7 @@
   </div>
 </div>
 <div id="aviso-corte">⏰ Ya son las 5: haz el corte de hoy. Toca aquí.</div>
-<div class="tabs"><button class="on" data-t="pagos">💸 Pagos</button><button data-t="pedidos">📦 Pedidos</button><button data-t="corte">🧮 Corte</button><button data-t="rfc">🔎 RFC</button><button data-t="resp">💬 Respuestas</button></div>
+<div class="tabs"><button class="on" data-t="pagos">💸<br>Pagos</button><button data-t="pedidos">📦<br>Pedidos</button><button data-t="corte">🧮<br>Corte</button><button data-t="rfc">🔎<br>RFC</button><button data-t="resp">💬<br>Respuestas</button></div>
 <main>
   <section id="t-pagos">
     <div class="card">
@@ -312,7 +313,7 @@
     llamar('cajaRecibido', [K, [b.dataset.llego], cod()], function () { cargar(); }, function (e) { alert(e); }, b);
   });
   function horaMexico() { try { return Number(new Date().toLocaleString('en-US', { timeZone: 'America/Mexico_City', hour: 'numeric', hour12: false })) % 24; } catch (e) { return new Date().getHours(); } }
-  function revisarHora() { $('aviso-corte').style.display = D && !D.corteHoy && horaMexico() >= ((D && D.horaCorte) || 17) ? 'block' : 'none'; }
+  function revisarHora() { $('aviso-corte').style.display = D && !D.corteHoy && horaMexico() >= (D && D.horaCorte != null ? D.horaCorte : 17) ? 'block' : 'none'; }
   $('aviso-corte').onclick = function () { document.querySelector('.tabs button[data-t=corte]').click(); window.scrollTo(0, 0); };
   setInterval(revisarHora, 60000);
   cargar();

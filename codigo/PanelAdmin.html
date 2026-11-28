@@ -444,7 +444,7 @@
     run('cajaDatos', [K], function (r) { CAJA = r; marcarNb(); pintarProv(); }, $('prov-lista'));
   }
   function marcarNb() {
-    var np = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }).length, nd = CAJA.pedidos.filter(function (p) { return p.estado !== 'Pedido'; }).length;
+    var np = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }).length, nd = CAJA.pedidos.filter(function (p) { return p.estado === 'Pendiente'; }).length;
     [['pagos', np], ['pedidos', nd]].forEach(function (x) { var nb = $('nb-' + x[0]); nb.style.display = x[1] ? '' : 'none'; nb.textContent = x[1]; });
   }
   function seccion_marca() { Array.prototype.forEach.call(document.querySelectorAll('.seg[data-pp]'), function (b) { b.classList.toggle('on', b.dataset.pp === PV); }); }
