@@ -350,6 +350,18 @@ function procesarGrupo_(base, g, procesadas, revisar) {
       if (!s) motivo = (motivo ? motivo + ' ' : '') + 'El cliente ' + cfdi.rfc + ' tiene ' + abiertas.length + ' solicitudes abiertas: pon el folio del ticket en el nombre del archivo.';
     }
     else if (!abiertas.length && delRfc.length === 1) s = delRfc[0];
+    else if (!abiertas.length) {
+      // La contadora ya la marcó «Enviada» (con el botón del correo) pero el archivo llega después: la enviada más reciente sin archivo.
+      const hace = Date.now() - 20 * 86400000;
+      const t = x => (x['Fecha estado'] instanceof Date ? x['Fecha estado'].getTime() : 0);
+      const env = delRfc.filter(x => x['Estado'] === 'Enviada' && t(x) > hace).sort((a, b) => t(b) - t(a));
+      if (env.length) {
+        const xmlTxt = g.xml ? g.xml.getBlob().getDataAsString('UTF-8') : '';
+        const conTicket = env.filter(x => { const n = String(normalizarFolio(x['Folio ticket'])).split('-').pop(); return n.length >= 3 && new RegExp('(^|[^0-9])' + n + '([^0-9]|$)').test(xmlTxt); });
+        s = conTicket.length === 1 ? conTicket[0] : env[0];
+      }
+      else motivo = (motivo ? motivo + ' ' : '') + 'No hay ninguna solicitud del RFC ' + cfdi.rfc + ' esperando factura.';
+    }
     else motivo = (motivo ? motivo + ' ' : '') + (abiertas.length > 1
       ? 'El cliente ' + cfdi.rfc + ' tiene ' + abiertas.length + ' solicitudes abiertas: pon el folio del ticket en el nombre del archivo.'
       : 'No hay ninguna solicitud del RFC ' + cfdi.rfc + ' esperando factura.');

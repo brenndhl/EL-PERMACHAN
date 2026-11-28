@@ -74,6 +74,7 @@
   <button class="seg seg-prov" data-s="prov" data-pp="pedidos" style="display:none">📦 Pedidos<span class="nb" id="nb-pedidos" style="display:none"></span></button>
   <button class="seg seg-prov" data-s="prov" data-pp="cortes" style="display:none">🧮 Cortes</button>
   <button class="seg seg-prov" data-s="prov" data-pp="cajeras" style="display:none">👩 Cajeras</button>
+  <button class="seg" data-s="resp">💬 Respuestas</button>
 </nav>
 <main>
 <div class="seccion on" id="s-facturas">
@@ -108,8 +109,75 @@
   <div id="com-lista"><div class="card">Cargando…</div></div>
 </div>
 
+<div class="seccion" id="s-resp">
+<div class="card" id="rq">
+  <h2 style="margin-top:0">💬 ¿Qué le respondo al cliente?</h2>
+  <p class="nota">Pega o escribe lo que te dijo el cliente y toca <b>«¿Qué le respondo?»</b>. Te sale la respuesta lista: la puedes cambiar y con <b>Copiar</b> la pegas en WhatsApp.</p>
+  <textarea id="rq-msg" style="width:100%;min-height:90px;font-size:16px;padding:10px;border:1px solid #c9bfa8;border-radius:10px;font-family:inherit" placeholder="Ej.: Hola, ¿cómo saco mi factura? Ya pasaron 5 días y no me llega"></textarea>
+  <button type="button" id="rq-btn" style="width:100%;padding:14px;font-size:16px;font-weight:700;border:0;border-radius:12px;background:#141110;color:#f3ead6;margin-top:10px;cursor:pointer">💡 ¿Qué le respondo?</button>
+  <div id="rq-res"></div>
+  <details style="margin-top:14px"><summary style="font-weight:700;cursor:pointer">📚 Ver todas las respuestas</summary><div id="rq-todas"></div></details>
+</div>
+<script>
+(function () {
+  var R = [
+    { t: '🧾 Quiere una factura', k: ['factura', 'facturar', 'facturacion', 'cfdi', 'como saco', 'como pido', 'solicitar', 'pedir', 'deducible', 'rfc'],
+      r: 'Hola, con gusto. Puede pedir su factura desde nuestra app (https://brenndhl.github.io/EL-PERMACHAN/): escriba su RFC, el número del ticket (abajo a la derecha, por ejemplo #1-48349), la forma de pago y suba una foto del ticket. Le llegará un correo confirmando que la recibimos. Normalmente tarda de 1 a 3 días hábiles. ¡Gracias por visitarnos!' },
+    { t: '⏳ No le ha llegado / cuánto tarda', k: ['no me llega', 'no ha llegado', 'no llego', 'cuando', 'cuanto tarda', 'tarda', 'dias', 'todavia', 'aun no', 'sigo esperando', 'esperando', 'ya pasaron'],
+      r: 'Hola, las facturas tardan normalmente de 1 a 3 días hábiles. Cuando está lista le llega un correo «¡Ya está tu factura!» y también la puede descargar en la app, en Mis facturas. Si ya pasaron más de 3 días hábiles, ¿me confirma su RFC y el número del ticket para revisarlo?' },
+    { t: '📥 No encuentra o no puede descargar', k: ['descargar', 'bajar', 'donde veo', 'donde esta', 'no encuentro', 'pdf', 'xml', 'perdi', 'borre', 'otra vez', 'reenviar', 'reenvien', 'mandar de nuevo'],
+      r: 'Hola, en la app entre a «Mis facturas», escriba su RFC, elija su correo y ponga el código de 6 cifras que le enviamos. Ahí verá cada factura con los botones para bajar el PDF y el XML cuando quiera.' },
+    { t: '✉️ No le llega el código', k: ['codigo', 'clave', 'no recibo', 'spam', 'correo no', 'no me llega el correo', 'verificacion'],
+      r: 'Hola, revise por favor la carpeta de spam o promociones de su correo. El código caduca a los 15 minutos y puede pedir otro. Si sigue sin llegar, dígame el correo que usó y lo revisamos.' },
+    { t: '📄 Constancia de Situación Fiscal', k: ['constancia', 'situacion fiscal', 'csf', 'cedula', 'tengo que mandar', 'documento'],
+      r: 'Hola, la constancia solo hace falta la primera vez. Si ya le hemos facturado antes, ya tenemos sus datos y no hace falta enviarla. Cada 6 meses le pedimos que la actualice desde la app, en Mis facturas → Mis datos.' },
+    { t: '✏️ Datos equivocados / corregir', k: ['equivoque', 'error', 'mal', 'incorrect', 'corregir', 'cambiar', 'razon social', 'codigo postal', 'regimen', 'uso cfdi', 'cancelar', 'refacturar'],
+      r: 'Hola, no hay problema. Entre a la app, en Mis facturas → Mis datos, corrija sus datos y suba su constancia actualizada. Si la factura ya salió con el dato equivocado, dígame el número del ticket y le pedimos a la contadora que la corrija.' },
+    { t: '❌ Le rechazaron la solicitud', k: ['rechaz', 'no se pudo', 'no procede', 'negaron', 'por que no'],
+      r: 'Hola, en el correo que le enviamos y en la app (Mis facturas) aparece el motivo, por ejemplo ticket de otro mes o RFC que no coincide. Corrija ese dato y vuelva a pedirla. Si necesita ayuda, escríbame el motivo que le aparece.' },
+    { t: '🧍 Persona física o moral', k: ['fisica', 'moral', 'empresa', 'persona', '12', '13'],
+      r: 'Hola, si la factura es a su nombre es persona física (su RFC tiene 13 letras y números). Si es a nombre de una empresa es persona moral (el RFC tiene 12). Al pedirla en la app se lo pregunta y se comprueba con el RFC.' },
+    { t: '🗓️ Ticket de otro mes', k: ['mes pasado', 'otro mes', 'antiguo', 'viejo', 'semana pasada', 'hace un mes', 'del mes'],
+      r: 'Hola, escríbame por favor la fecha y el número del ticket y lo revisamos con la contadora para decirle si todavía se puede facturar.' },
+    { t: '💳 Pago con tarjeta / forma de pago', k: ['tarjeta', 'efectivo', 'transferencia', 'forma de pago', 'pague con', 'debito', 'credito'],
+      r: 'Hola, al pedir la factura en la app elija la forma de pago con la que pagó (efectivo, tarjeta de débito o de crédito). Si no está seguro, viene en su ticket.' },
+    { t: '🔎 Otra cosa', k: [],
+      r: 'Hola, gracias por escribirnos. Déjeme revisarlo y le respondo en cuanto tenga la información.' }
+  ];
+  function $q(id) { return document.getElementById(id); }
+  function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+  function norm(s) { return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+  function bloque(i, abierto) {
+    var x = R[i];
+    return '<div style="border:1px solid #e5dccb;border-radius:12px;padding:12px;margin-top:10px;background:#fffdf8">' +
+      '<b>' + esc(x.t) + '</b><textarea id="rq-t' + i + abierto + '" style="width:100%;min-height:120px;margin-top:8px;font-size:16px;padding:10px;border:1px solid #c9bfa8;border-radius:8px;font-family:inherit">' + esc(x.r) + '</textarea>' +
+      '<button type="button" data-rqc="rq-t' + i + abierto + '" style="width:100%;padding:12px;font-size:16px;font-weight:700;border:0;border-radius:10px;background:#1e6b3a;color:#fff;margin-top:6px;cursor:pointer">📋 Copiar respuesta</button></div>';
+  }
+  function sugerir() {
+    var m = norm($q('rq-msg').value);
+    if (m.trim().length < 3) { $q('rq-res').innerHTML = '<p class="nota" style="color:#b3261e">Escribe o pega primero lo que te dijo el cliente.</p>'; return; }
+    var pts = R.map(function (x, i) { return { i: i, p: x.k.reduce(function (a, k) { return a + (m.indexOf(norm(k)) >= 0 ? (k.length > 6 ? 2 : 1) : 0); }, 0) }; })
+      .filter(function (x) { return x.p > 0; }).sort(function (a, b) { return b.p - a.p; });
+    if (!pts.length) pts = [{ i: R.length - 1 }];
+    $q('rq-res').innerHTML = '<p class="nota" style="margin:12px 0 0">Te sugiero esta respuesta:</p>' + bloque(pts[0].i, 's') +
+      (pts.length > 1 ? '<p class="nota" style="margin:12px 0 0">También podría ser:</p>' + pts.slice(1, 3).map(function (x) { return bloque(x.i, 'o'); }).join('') : '') +
+      '<p class="nota" style="margin-top:10px">Si no encaja, avisa a Brenda.</p>';
+  }
+  $q('rq-btn').onclick = sugerir;
+  $q('rq-todas').innerHTML = R.map(function (x, i) { return bloque(i, 'a'); }).join('');
+  $q('rq').addEventListener('click', function (ev) {
+    var b = ev.target.closest && ev.target.closest('[data-rqc]'); if (!b) return;
+    var t = $q(b.dataset.rqc); t.select();
+    var ok = function () { b.textContent = '✔ Copiado'; setTimeout(function () { b.textContent = '📋 Copiar respuesta'; }, 1500); };
+    if (navigator.clipboard) navigator.clipboard.writeText(t.value).then(ok, function () { document.execCommand('copy'); ok(); }); else { document.execCommand('copy'); ok(); }
+  });
+})();
+</script>
+
+</div>
+
 <div class="seccion" id="s-prov">
-  <div class="acc" style="margin:0 0 10px"><button class="x-ok" id="nv-pago">＋ Pago</button><button class="x-em" id="nv-pedido">＋ Pedido</button><button class="x-re" id="nv-corte">＋ Corte</button></div>
+  <div class="acc" style="margin:0 0 10px"><button class="x-ok" id="nv-pago">＋ Nuevo pago</button><button class="x-ok" id="nv-pedido">＋ Nuevo pedido</button><button class="x-ok" id="nv-corte">＋ Hacer corte</button><button class="x-re" id="ver-caja">👀 Ver la app de la cajera</button></div>
   <div id="nv-form"></div>
   <div id="prov-lista"><div class="card">Cargando…</div></div>
 </div>
@@ -447,10 +515,14 @@
     var np = CAJA.pagos.filter(function (p) { return p.estado !== 'Pagado'; }).length, nd = CAJA.pedidos.filter(function (p) { return p.estado === 'Pendiente'; }).length;
     [['pagos', np], ['pedidos', nd]].forEach(function (x) { var nb = $('nb-' + x[0]); nb.style.display = x[1] ? '' : 'none'; nb.textContent = x[1]; });
   }
+  var VISTA_PREV = '';
+  $('ver-caja').onclick = function () { run('panelUrlCaja', [K], function (r) { window.open(r.url, '_blank'); }, $('nv-form')); };
   function seccion_marca() { Array.prototype.forEach.call(document.querySelectorAll('.seg[data-pp]'), function (b) { b.classList.toggle('on', b.dataset.pp === PV); }); }
   function pintarProv() {
     if (!CAJA) return;
     seccion_marca();
+    ['pago', 'pedido', 'corte'].forEach(function (t) { $('nv-' + t).style.display = PV === t + 's' ? '' : 'none'; });
+    if (VISTA_PREV !== PV) { $('nv-form').innerHTML = ''; VISTA_PREV = PV; }
     if (PV === 'cajeras') { pintarCajeras(); return; }
     if (PV === 'cortes') {
       var cs = CAJA.cortes || { lista: [], mes: null }, mm = cs.mes || { dias: 0, tarjeta: 0, comision: 0, neto: 0, ventas: 0, gastos: 0, diferencia: 0 };

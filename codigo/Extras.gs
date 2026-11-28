@@ -551,8 +551,20 @@ function procesarComplemento_(base, g, cfdi, procesadas, revisar) {
     const porUuid = Object.keys(facts).filter(k => cfdi.relacionados.indexOf(String(facts[k]['UUID']).toUpperCase()) >= 0);
     if (porUuid.length === 1) id = porUuid[0];
   }
+  if (!id && cfdi.rfc) {
+    // La factura original es anterior al sistema: la solicitud «por definir» más reciente de ese RFC que aún no tiene complemento.
+    const compl = complementosMap_();
+    const pd = leerTabla_(hoja_(HOJAS.SOLICITUDES)).filter(s => s['ID'] && normalizarRFC(s['RFC']) === cfdi.rfc && /definir/i.test(String(s['Forma de pago'] || '')) && !compl[String(s['ID'])] && s['Estado'] !== 'Rechazada')
+      .sort((a, b) => (b['Fecha solicitud'] instanceof Date ? b['Fecha solicitud'].getTime() : 0) - (a['Fecha solicitud'] instanceof Date ? a['Fecha solicitud'].getTime() : 0));
+    if (pd.length) id = String(pd[0]['ID']);
+  }
   const f = id ? buscarSolicitud_(id) : null;
   if (!f) return aRevisar_(g, revisar, base, 'Es un complemento de pago pero no sé de qué solicitud: pon la carpeta con el número de solicitud.');
+  try {   // si la contadora emitió el complemento, el pago está hecho: queda marcado como pagado (sin volver a escribirle)
+    if (!pagosMap_()[String(id)]) agregarFila_(hojaPagos_(), COL_PAGOS, { 'ID': id, 'Fecha pago': cfdi.fechaPago ? new Date(cfdi.fechaPago.slice(0, 19)) : new Date(),
+      'RFC': f.datos['RFC'], 'Cliente': f.datos['Nombre o razón social'], 'Folio ticket': f.datos['Folio ticket'], 'Nota': 'Complemento de pago recibido de la contadora',
+      'Aviso a contadora': 'No (lo emitió ella)', 'Marcado el': new Date() });
+  } catch (err) { Logger.log(err); }
   const s = f.datos;
   if (cfdi.rfc && normalizarRFC(s['RFC']) !== cfdi.rfc) {
     return aRevisar_(g, revisar, base, 'El complemento está a nombre de ' + cfdi.rfc + ' pero la solicitud ' + id + ' es de ' + s['RFC'] + '.');
@@ -742,6 +754,12 @@ function recordatorioCorte() {
   return 'Aviso enviado';
 }
 
+/** Enlace para que la administradora vea la app de la cajera (sin código de cajera). */
+function panelUrlCaja(k) {
+  if (!esDuena_(k)) return { ok: false, error: 'Solo la administradora.' };
+  return { ok: true, url: urlWeb_() + '?k=' + encodeURIComponent(k) + '&v=caja' };
+}
+
 /* ============================ CAJA: CONSULTAR RFC ============================ */
 
 /** La cajera consulta si un RFC es de persona física o moral y si ya es cliente. */
@@ -920,7 +938,7 @@ function emparejarYGuardar_(blobs, carpeta, idMsg) {
     guardados.push(carpeta.createFile(x.setName(nombre + '.xml')));
     if (p) { usados.push(p); guardados.push(carpeta.createFile(p.setName(nombre + '.pdf'))); }
   });
-  pdfs.filter(q => usados.indexOf(q) < 0).forEach(q => guardados.push(carpeta.createFile(q.setName('correo_' + sufijo + '_' + q.getName().replace(/[^A-Za-z0-9_.-]/g, '_')))));
+  // Los PDF sin XML (constancias, otros documentos) no se suben: sin XML no se sabe de qué factura son.
   return guardados;
 }
 
